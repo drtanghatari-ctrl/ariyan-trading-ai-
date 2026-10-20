@@ -59,6 +59,35 @@ def _has_unique_index(db, table, column):
     return False
 
 
+
+def _validate_canonical_journal_sql(db):
+    """Require the canonical A004 journal table definition."""
+    row = db.execute(
+        "SELECT sql FROM sqlite_master "
+        "WHERE type='table' AND name='ledger_entries'"
+    ).fetchone()
+
+    if row is None or not isinstance(row[0], str):
+        raise ValueError("Missing journal table definition")
+
+    expected = (
+        "CREATE TABLE ledger_entries ("
+        "sequence INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "request_id TEXT NOT NULL UNIQUE, "
+        "action TEXT NOT NULL "
+        "CHECK(action IN ('BUY','SELL')), "
+        "quantity TEXT NOT NULL, "
+        "price TEXT NOT NULL, "
+        "cash_delta TEXT NOT NULL, "
+        "units_delta TEXT NOT NULL)"
+    )
+
+    if row[0] != expected:
+        raise ValueError(
+            "Journal schema differs from canonical A004 definition"
+        )
+
+
 def validate_ledger_schema(db):
     """Reject missing or structurally invalid ledger tables."""
 
@@ -72,6 +101,7 @@ def validate_ledger_schema(db):
     )
 
     journal = _columns(db, "ledger_entries")
+    _validate_canonical_journal_sql(db)
 
     _require_column(
         journal, "sequence", "INTEGER",

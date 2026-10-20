@@ -6,6 +6,12 @@ from pathlib import Path
 from .ledger_validation import exact_cash
 from .initialization_lock import initialization_lock
 from .schema_validation import validate_ledger_schema
+from .journal_store import (
+    append_journal_commitment,
+    create_protected_journal,
+    protection_status,
+    verify_protected_journal,
+)
 
 
 class DurableLedger:
@@ -135,7 +141,12 @@ class DurableLedger:
                         )
 
             validate_ledger_schema(self.db)
+            if new_database:
+                create_protected_journal(self.db, amount)
             self.opening_cash = amount
+            self.journal_protection = protection_status(self.db)
+            if self.journal_protection == "protected":
+                verify_protected_journal(self.db, amount)
             self.balances()
             self.db.execute("COMMIT")
 
@@ -147,6 +158,23 @@ class DurableLedger:
 
     def balances(self):
         """Validate and replay the persistent journal."""
+        if not self.db.in_transaction:
+            self.db.execute('BEGIN')
+            try:
+                result = self._replay_balances()
+                self.db.execute('COMMIT')
+                return result
+            except BaseException:
+                if self.db.in_transaction:
+                    self.db.execute('ROLLBACK')
+                raise
+        return self._replay_balances()
+
+    def _replay_balances(self):
+        if self.journal_protection == 'protected':
+            verify_protected_journal(
+                self.db, self.opening_cash
+            )
         from decimal import Decimal, localcontext
 
         from .ledger_validation import (
@@ -249,6 +277,10 @@ class DurableLedger:
                 ),
             )
 
+            if self.journal_protection == 'protected':
+                append_journal_commitment(
+                    self.db, self.opening_cash
+                )
             self.db.execute("COMMIT")
             return self.balances()
 
@@ -305,6 +337,10 @@ class DurableLedger:
                 ),
             )
 
+            if self.journal_protection == 'protected':
+                append_journal_commitment(
+                    self.db, self.opening_cash
+                )
             self.db.execute("COMMIT")
             return self.balances()
 
