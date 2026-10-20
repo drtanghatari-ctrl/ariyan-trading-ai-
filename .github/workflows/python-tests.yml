@@ -1,0 +1,34 @@
+name: ARIYAN Trading AI Tests
+
+on:
+  push:
+    branches:
+      - development/accelerated-build
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    name: Offline regression tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check Python syntax
+        run: |
+          python -m compileall -q app tests
+
+      - name: Run regression tests
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -v
