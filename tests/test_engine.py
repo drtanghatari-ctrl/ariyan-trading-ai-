@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -65,7 +66,7 @@ class EngineTests(unittest.TestCase):
         engine = PaperEngine(self.db)
         engine.execute("BUY", 100)
 
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db:
             count = db.execute(
                 "SELECT COUNT(*) FROM trades"
             ).fetchone()[0]

@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -42,7 +43,7 @@ class RecoveryTests(unittest.TestCase):
     def test_failed_insert_rolls_back_portfolio(self):
         engine = PaperEngine(self.path)
 
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db:
             db.execute("""
                 CREATE TRIGGER reject_trade
                 BEFORE INSERT ON trades
@@ -72,7 +73,7 @@ class RecoveryTests(unittest.TestCase):
         engine = PaperEngine(self.path)
         engine.execute("BUY", 100)
 
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db:
             count = db.execute(
                 "SELECT COUNT(*) FROM trades"
             ).fetchone()[0]

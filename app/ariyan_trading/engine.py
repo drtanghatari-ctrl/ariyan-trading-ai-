@@ -4,7 +4,9 @@ No broker connectivity or real financial operations.
 """
 import math
 import sqlite3
+import uuid
 from dataclasses import dataclass
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -59,7 +61,7 @@ class PaperEngine:
         self.db_path = str(Path(db_path))
         self.limits = limits or RiskLimits()
 
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS portfolio (
                     id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -76,13 +78,48 @@ class PaperEngine:
                     cash_after REAL NOT NULL
                 )
             """)
+            existing = db.execute(
+                "SELECT cash, units FROM portfolio WHERE id=1"
+            ).fetchone()
+            if existing is None:
+                historical = db.execute(
+                    "SELECT COUNT(*) FROM trades"
+                ).fetchone()[0]
+                if historical:
+                    raise RuntimeError(
+                        "Historical trades exist without portfolio; "
+                        "manual recovery required"
+                    )
+                db.execute(
+                    "INSERT INTO portfolio (id, cash, units) "
+                    "VALUES (1, ?, 0)",
+                    (float(cash),),
+                )
+
+        with self._connection() as db:
+            columns = {
+                row[1] for row in db.execute(
+                    "PRAGMA table_info(trades)"
+                )
+            }
+            if "request_id" not in columns:
+                db.execute(
+                    "ALTER TABLE trades ADD COLUMN request_id TEXT"
+                )
             db.execute(
-                """INSERT OR IGNORE INTO portfolio
-                (id, cash, units) VALUES (1, ?, 0)""",
-                (float(cash),),
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "idx_trades_request_id ON trades(request_id)"
             )
 
         self.refresh()
+
+    @contextmanager
+    def _connection(self):
+        db = self._connect()
+        try:
+            yield db
+        finally:
+            db.close()
 
     def _connect(self):
         db = sqlite3.connect(
@@ -94,7 +131,7 @@ class PaperEngine:
         return db
 
     def refresh(self):
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute(
                 "SELECT cash, units FROM portfolio WHERE id=1"
             ).fetchone()
@@ -103,7 +140,7 @@ class PaperEngine:
         self.cash, self.units = row
         return self.cash, self.units
 
-    def execute(self, action, price):
+    def execute(self, action, price, request_id=None):
         if action not in ("BUY", "SELL", "HOLD"):
             raise ValueError("Unknown action")
         if not positive_number(price):
@@ -113,9 +150,25 @@ class PaperEngine:
             self.refresh()
             return None
 
+        if request_id is None:
+            request_id = str(uuid.uuid4())
+        if (
+            not isinstance(request_id, str)
+            or not request_id.strip()
+            or len(request_id) > 128
+        ):
+            raise ValueError("Invalid request ID")
+
         db = self._connect()
         try:
             db.execute("BEGIN IMMEDIATE")
+            duplicate = db.execute(
+                "SELECT id FROM trades WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if duplicate is not None:
+                raise ValueError("Duplicate trade request")
+
             row = db.execute(
                 "SELECT cash, units FROM portfolio WHERE id=1"
             ).fetchone()
@@ -166,9 +219,9 @@ class PaperEngine:
             )
             db.execute(
                 """INSERT INTO trades
-                (action, price, units, cash_after)
-                VALUES (?, ?, ?, ?)""",
-                (action, price, quantity, new_cash),
+                (action, price, units, cash_after, request_id)
+                VALUES (?, ?, ?, ?, ?)""",
+                (action, price, quantity, new_cash, request_id),
             )
             db.commit()
 
@@ -183,7 +236,6 @@ class PaperEngine:
             }
         except BaseException:
             db.rollback()
-            self.refresh()
             raise
         finally:
             db.close()
