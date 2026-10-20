@@ -38,9 +38,17 @@ class LegacySafetyTests(unittest.TestCase):
                 count = db.execute(
                     "SELECT COUNT(*) FROM trades"
                 ).fetchone()[0]
-                portfolio = db.execute(
-                    "SELECT COUNT(*) FROM portfolio"
+                exists = db.execute(
+                    "SELECT COUNT(*) FROM sqlite_master "
+                    "WHERE type='table' AND name='portfolio'"
                 ).fetchone()[0]
+
+                portfolio = (
+                    db.execute(
+                        "SELECT COUNT(*) FROM portfolio"
+                    ).fetchone()[0]
+                    if exists else 0
+                )
 
             self.assertEqual(count, 1)
             self.assertEqual(portfolio, 0)

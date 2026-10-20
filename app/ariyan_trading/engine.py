@@ -62,54 +62,63 @@ class PaperEngine:
         self.limits = limits or RiskLimits()
 
         with self._connection() as db:
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS portfolio (
-                    id INTEGER PRIMARY KEY CHECK(id = 1),
-                    cash REAL NOT NULL CHECK(cash >= 0),
-                    units REAL NOT NULL CHECK(units >= 0)
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS trades (
-                    id INTEGER PRIMARY KEY,
-                    action TEXT NOT NULL,
-                    price REAL NOT NULL,
-                    units REAL NOT NULL,
-                    cash_after REAL NOT NULL
-                )
-            """)
-            existing = db.execute(
-                "SELECT cash, units FROM portfolio WHERE id=1"
-            ).fetchone()
-            if existing is None:
-                historical = db.execute(
-                    "SELECT COUNT(*) FROM trades"
-                ).fetchone()[0]
-                if historical:
-                    raise RuntimeError(
-                        "Historical trades exist without portfolio; "
-                        "manual recovery required"
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                db.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolio (
+                        id INTEGER PRIMARY KEY CHECK(id = 1),
+                        cash REAL NOT NULL CHECK(cash >= 0),
+                        units REAL NOT NULL CHECK(units >= 0)
                     )
+                """)
+                db.execute("""
+                    CREATE TABLE IF NOT EXISTS trades (
+                        id INTEGER PRIMARY KEY,
+                        action TEXT NOT NULL,
+                        price REAL NOT NULL,
+                        units REAL NOT NULL,
+                        cash_after REAL NOT NULL
+                    )
+                """)
+
+                existing = db.execute(
+                    "SELECT cash, units FROM portfolio WHERE id=1"
+                ).fetchone()
+
+                if existing is None:
+                    historical = db.execute(
+                        "SELECT COUNT(*) FROM trades"
+                    ).fetchone()[0]
+                    if historical:
+                        raise RuntimeError(
+                            "Historical trades exist without portfolio; "
+                            "manual recovery required"
+                        )
+                    db.execute(
+                        "INSERT INTO portfolio (id, cash, units) "
+                        "VALUES (1, ?, 0)",
+                        (float(cash),),
+                    )
+
+                columns = {
+                    row[1] for row in db.execute(
+                        "PRAGMA table_info(trades)"
+                    )
+                }
+                if "request_id" not in columns:
+                    db.execute(
+                        "ALTER TABLE trades ADD COLUMN request_id TEXT"
+                    )
+
                 db.execute(
-                    "INSERT INTO portfolio (id, cash, units) "
-                    "VALUES (1, ?, 0)",
-                    (float(cash),),
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "idx_trades_request_id ON trades(request_id)"
                 )
 
-        with self._connection() as db:
-            columns = {
-                row[1] for row in db.execute(
-                    "PRAGMA table_info(trades)"
-                )
-            }
-            if "request_id" not in columns:
-                db.execute(
-                    "ALTER TABLE trades ADD COLUMN request_id TEXT"
-                )
-            db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS "
-                "idx_trades_request_id ON trades(request_id)"
-            )
+                db.commit()
+            except BaseException:
+                db.rollback()
+                raise
 
         self.refresh()
 
