@@ -1,5 +1,7 @@
 """A006: opt-in authenticated verification on ledger opening."""
 
+import sqlite3
+
 import tempfile
 import unittest
 from decimal import Decimal
@@ -178,6 +180,118 @@ class CheckpointOpeningTests(unittest.TestCase):
             self.assertEqual(count, 0)
         finally:
             ledger.db.close()
+
+
+    def test_verified_connection_rejects_direct_sql_write(self):
+        self.create_ledger()
+        self.publish_checkpoint()
+
+        ledger = DurableLedger(
+            self.database,
+            checkpoint_path=self.anchor,
+            checkpoint_key=KEY,
+        )
+        try:
+            with self.assertRaises(sqlite3.OperationalError):
+                ledger.db.execute(
+                    "INSERT INTO ledger_entries "
+                    "(request_id,action,quantity,price,"
+                    "cash_delta,units_delta) "
+                    "VALUES ('direct-write','BUY','1','10',"
+                    "'-10','1')"
+                )
+        finally:
+            ledger.db.close()
+
+
+    def test_verified_open_does_not_create_initialization_lock(self):
+        self.create_ledger()
+        self.publish_checkpoint()
+
+        lock = Path(str(self.database) + ".init.lock")
+        if lock.exists():
+            lock.unlink()
+
+        ledger = DurableLedger(
+            self.database,
+            checkpoint_path=self.anchor,
+            checkpoint_key=KEY,
+        )
+        try:
+            self.assertFalse(lock.exists())
+        finally:
+            ledger.db.close()
+
+    def test_verified_open_does_not_create_missing_database(self):
+        self.assertFalse(self.database.exists())
+
+        with self.assertRaises(ValueError):
+            DurableLedger(
+                self.database,
+                checkpoint_path=self.anchor,
+                checkpoint_key=KEY,
+            )
+
+        self.assertFalse(self.database.exists())
+        self.assertFalse(
+            Path(str(self.database) + ".init.lock").exists()
+        )
+
+    def test_verified_connection_rejects_schema_changes(self):
+        self.create_ledger()
+        self.publish_checkpoint()
+
+        ledger = DurableLedger(
+            self.database,
+            checkpoint_path=self.anchor,
+            checkpoint_key=KEY,
+        )
+        try:
+            with self.assertRaises(sqlite3.OperationalError):
+                ledger.db.execute(
+                    "CREATE TABLE unauthorized_change (id INTEGER)"
+                )
+        finally:
+            ledger.db.close()
+
+
+    def test_verified_open_under_wal_rejects_stale_checkpoint(self):
+        self.create_ledger()
+
+        writer = DurableLedger(self.database)
+        try:
+            mode = writer.db.execute(
+                "PRAGMA journal_mode=WAL"
+            ).fetchone()[0]
+            self.assertEqual(mode.lower(), "wal")
+
+            self.publish_checkpoint()
+
+            verified = DurableLedger(
+                self.database,
+                checkpoint_path=self.anchor,
+                checkpoint_key=KEY,
+            )
+            try:
+                self.assertEqual(
+                    verified.balances()[0], Decimal("1000.00")
+                )
+                self.assertTrue(verified.checkpoint_read_only)
+            finally:
+                verified.db.close()
+
+            writer.record_buy("wal-a006", "1", "10.00")
+
+            with self.assertRaisesRegex(
+                ValueError, "Checkpoint sequence mismatch"
+            ):
+                DurableLedger(
+                    self.database,
+                    checkpoint_path=self.anchor,
+                    checkpoint_key=KEY,
+                )
+        finally:
+            writer.db.close()
 
 
 if __name__ == "__main__":

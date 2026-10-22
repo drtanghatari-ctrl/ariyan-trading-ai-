@@ -26,9 +26,75 @@ class DurableLedger:
                 "Ledger directory does not exist"
             )
 
-        with initialization_lock(self.path):
-            self.checkpoint_read_only = checkpoint_path is not None
-        self._initialize(opening_cash, checkpoint_path, checkpoint_key)
+        self.checkpoint_read_only = checkpoint_path is not None
+        if self.checkpoint_read_only:
+            self._initialize_verified_read_only(
+                opening_cash, checkpoint_path, checkpoint_key
+            )
+        else:
+            with initialization_lock(self.path):
+                self._initialize(opening_cash)
+
+    def _initialize_verified_read_only(
+        self, opening_cash, checkpoint_path, checkpoint_key
+    ):
+        """Verify an existing ledger using a read-only SQLite connection."""
+        if not self.path.is_file():
+            raise ValueError("Cannot open a new ledger with a checkpoint")
+
+        uri = self.path.resolve().as_uri() + "?mode=ro"
+        self.db = sqlite3.connect(
+            uri, uri=True, isolation_level=None, timeout=10
+        )
+
+        try:
+            self.db.execute("BEGIN")
+
+            # Establish a stable SQLite read snapshot.
+            self.db.execute(
+                "SELECT name FROM sqlite_master LIMIT 1"
+            ).fetchall()
+
+            integrity = self.db.execute(
+                "PRAGMA integrity_check"
+            ).fetchall()
+            if integrity != [("ok",)]:
+                raise ValueError(
+                    "SQLite database integrity check failed"
+                )
+
+            validate_ledger_schema(self.db)
+
+            row = self.db.execute(
+                "SELECT value FROM ledger_meta "
+                "WHERE key='opening_cash'"
+            ).fetchone()
+            if row is None:
+                raise ValueError("Existing ledger missing opening cash")
+
+            amount = exact_cash(row[0])
+            if opening_cash is not None:
+                if exact_cash(opening_cash) != amount:
+                    raise ValueError("Opening cash mismatch")
+
+            self.opening_cash = amount
+            self.journal_protection = protection_status(self.db)
+
+            if self.journal_protection != "protected":
+                raise ValueError(
+                    "Unprotected journal cannot be anchored"
+                )
+
+            self.balances()
+            verify_checkpoint(
+                self.db, amount, checkpoint_path, checkpoint_key
+            )
+            self.db.execute("COMMIT")
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute("ROLLBACK")
+            self.db.close()
+            raise
 
     def _initialize(self, opening_cash, checkpoint_path=None, checkpoint_key=None):
         new_database = not self.path.exists()
