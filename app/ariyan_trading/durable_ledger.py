@@ -3,6 +3,7 @@
 import sqlite3
 from pathlib import Path
 
+from .checkpoint_verifier import verify_checkpoint
 from .ledger_validation import exact_cash
 from .initialization_lock import initialization_lock
 from .schema_validation import validate_ledger_schema
@@ -15,7 +16,9 @@ from .journal_store import (
 
 
 class DurableLedger:
-    def __init__(self, path, opening_cash=None):
+    def __init__(self, path, opening_cash=None, *, checkpoint_path=None, checkpoint_key=None):
+        if (checkpoint_path is None) != (checkpoint_key is None):
+            raise ValueError('Checkpoint path and key must be supplied together')
         self.path = Path(path)
 
         if not self.path.parent.is_dir():
@@ -24,9 +27,9 @@ class DurableLedger:
             )
 
         with initialization_lock(self.path):
-            self._initialize(opening_cash)
+            self._initialize(opening_cash, checkpoint_path, checkpoint_key)
 
-    def _initialize(self, opening_cash):
+    def _initialize(self, opening_cash, checkpoint_path=None, checkpoint_key=None):
         new_database = not self.path.exists()
 
         self.db = sqlite3.connect(
@@ -148,6 +151,12 @@ class DurableLedger:
             if self.journal_protection == "protected":
                 verify_protected_journal(self.db, amount)
             self.balances()
+            if checkpoint_path is not None:
+                if new_database:
+                    raise ValueError('Cannot open a new ledger with a checkpoint')
+                verify_checkpoint(
+                    self.db, amount, checkpoint_path, checkpoint_key
+                )
             self.db.execute("COMMIT")
 
         except BaseException:
