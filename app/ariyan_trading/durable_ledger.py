@@ -27,7 +27,8 @@ class DurableLedger:
             )
 
         with initialization_lock(self.path):
-            self._initialize(opening_cash, checkpoint_path, checkpoint_key)
+            self.checkpoint_read_only = checkpoint_path is not None
+        self._initialize(opening_cash, checkpoint_path, checkpoint_key)
 
     def _initialize(self, opening_cash, checkpoint_path=None, checkpoint_key=None):
         new_database = not self.path.exists()
@@ -251,6 +252,10 @@ class DurableLedger:
 
         quantity, price, cost = validated_trade(quantity, price)
 
+        if self.checkpoint_read_only:
+            raise RuntimeError(
+                "Checkpoint-verified ledger is read-only"
+            )
         self.db.execute("BEGIN IMMEDIATE")
         try:
             existing = self.db.execute(
@@ -311,6 +316,10 @@ class DurableLedger:
             quantity, price
         )
 
+        if self.checkpoint_read_only:
+            raise RuntimeError(
+                "Checkpoint-verified ledger is read-only"
+            )
         self.db.execute("BEGIN IMMEDIATE")
         try:
             existing = self.db.execute(

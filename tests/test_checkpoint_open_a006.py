@@ -152,5 +152,33 @@ class CheckpointOpeningTests(unittest.TestCase):
             )
 
 
+    def test_verified_session_rejects_trades(self):
+        self.create_ledger()
+        self.publish_checkpoint()
+
+        ledger = DurableLedger(
+            self.database,
+            checkpoint_path=self.anchor,
+            checkpoint_key=KEY,
+        )
+        try:
+            with self.assertRaisesRegex(
+                RuntimeError, "read-only"
+            ):
+                ledger.record_buy("blocked-buy", "1", "10")
+
+            with self.assertRaisesRegex(
+                RuntimeError, "read-only"
+            ):
+                ledger.record_sell("blocked-sell", "1", "10")
+
+            count = ledger.db.execute(
+                "SELECT COUNT(*) FROM ledger_entries"
+            ).fetchone()[0]
+            self.assertEqual(count, 0)
+        finally:
+            ledger.db.close()
+
+
 if __name__ == "__main__":
     unittest.main()
