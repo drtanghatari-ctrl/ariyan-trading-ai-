@@ -26,6 +26,12 @@ class CheckpointVerifierA006Tests(unittest.TestCase):
         )
         self.addCleanup(self.ledger.close)
 
+        self.ledger.db.execute("BEGIN")
+        self.addCleanup(
+            lambda: self.ledger.db.rollback()
+            if self.ledger.db.in_transaction else None
+        )
+
     def journal_tip(self):
         digest = verify_protected_journal(
             self.ledger.db,

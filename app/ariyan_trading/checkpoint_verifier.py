@@ -17,6 +17,11 @@ def verify_checkpoint(db, opening_cash, anchor_path, key):
     Requires a stable SQLite snapshot supplied by the caller.
     Rejects missing, stale, or divergent checkpoints.
     """
+    if not db.in_transaction:
+        raise ValueError(
+            "An active SQLite transaction is required"
+        )
+
     if protection_status(db) != "protected":
         raise ValueError("Unprotected journal cannot be anchored")
 
