@@ -44,3 +44,24 @@ Local Termux execution on 2026-10-22:
 Review the staged diff, confirm the regression suite,
 and commit only the intended source, tests, and record.
 Do not advance to A007 solely on this evidence.
+
+## Additional concurrency regression — 2026-10-22
+
+Permanent test:
+`tests/test_checkpoint_concurrency_a006.py`
+
+Observed on Termux:
+- WAL-mode concurrent reader/writer scenario passed.
+- Established historical snapshot accepted its matching anchor.
+- Fresh snapshot rejected the stale anchor after a committed trade.
+- Complete application regression suite: 139/139 passed.
+- Production source code was not changed for this regression.
+
+Scope:
+These results validate the tested read-only verification behavior.
+They do not establish automatic lifecycle integration,
+coordinated checkpoint publication, secure key custody,
+independent rollback resistance, or production certification.
+
+A006 verification subcomponent: locally validated.
+Full A006 security lifecycle: pending additional engineering.
