@@ -86,7 +86,7 @@ class DurableLedger:
                 )
 
             self.balances()
-            verify_checkpoint(
+            self._verified_checkpoint = verify_checkpoint(
                 self.db, amount, checkpoint_path, checkpoint_key
             )
             self.db.execute("COMMIT")
@@ -248,9 +248,19 @@ class DurableLedger:
 
     def _replay_balances(self):
         if self.journal_protection == 'protected':
-            verify_protected_journal(
+            digest = verify_protected_journal(
                 self.db, self.opening_cash
             )
+            checkpoint = getattr(self, "_verified_checkpoint", None)
+            if self.checkpoint_read_only and checkpoint is not None:
+                sequence = self.db.execute(
+                    "SELECT COUNT(*) FROM ledger_entries"
+                ).fetchone()[0]
+                expected_sequence, expected_digest = checkpoint
+                if sequence != expected_sequence:
+                    raise ValueError("Checkpoint sequence mismatch")
+                if digest != expected_digest:
+                    raise ValueError("Checkpoint digest mismatch")
         from decimal import Decimal, localcontext
 
         from .ledger_validation import (
