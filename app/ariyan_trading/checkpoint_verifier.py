@@ -22,6 +22,13 @@ def verify_checkpoint(db, opening_cash, anchor_path, key):
             "An active SQLite transaction is required"
         )
 
+    pending = db.execute(
+        "SELECT value FROM ledger_meta "
+        "WHERE key='checkpoint_publication_pending'"
+    ).fetchone()
+    if pending is not None:
+        raise ValueError("Checkpoint publication outcome is pending or uncertain")
+
     if protection_status(db) != "protected":
         raise ValueError("Unprotected journal cannot be anchored")
 
