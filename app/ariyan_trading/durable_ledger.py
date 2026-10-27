@@ -317,6 +317,25 @@ class DurableLedger:
 
         return cash, units
 
+    def _require_direct_writer_permission(self):
+        """Reject direct trades on checkpoint-managed ledgers."""
+        row = self.db.execute(
+            "SELECT value FROM ledger_meta WHERE key=?",
+            ("checkpoint_writer_mode",),
+        ).fetchone()
+
+        if row is None:
+            return
+
+        if row[0] == "managed-v1":
+            raise RuntimeError(
+                "Checkpoint-managed ledger requires coordinator"
+            )
+
+        raise RuntimeError(
+            "Unknown checkpoint writer mode; direct writes prohibited"
+        )
+
     def record_buy(self, request_id, quantity, price):
         """Atomically record a validated paper BUY."""
         from decimal import localcontext
@@ -334,6 +353,7 @@ class DurableLedger:
             )
         self.db.execute("BEGIN IMMEDIATE")
         try:
+            self._require_direct_writer_permission()
             existing = self.db.execute(
                 "SELECT 1 FROM ledger_entries "
                 "WHERE request_id=?",
@@ -398,6 +418,7 @@ class DurableLedger:
             )
         self.db.execute("BEGIN IMMEDIATE")
         try:
+            self._require_direct_writer_permission()
             existing = self.db.execute(
                 "SELECT 1 FROM ledger_entries "
                 "WHERE request_id=?",
