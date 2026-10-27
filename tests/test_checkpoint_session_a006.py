@@ -67,5 +67,67 @@ class CheckpointSessionA006Tests(unittest.TestCase):
         )
 
 
+    def test_same_sequence_different_history_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database = root / "original.sqlite"
+            alternate = root / "alternate.sqlite"
+            anchor = root / "checkpoint.json"
+            key = b"A006-divergent-history-test-key!!"
+
+            writer = DurableLedger(database, opening_cash="1000.00")
+            self.addCleanup(writer.close)
+            mode = writer.db.execute(
+                "PRAGMA journal_mode=WAL"
+            ).fetchone()[0]
+            self.assertEqual(mode.lower(), "wal")
+            writer.record_buy("original-history", "1", "10.00")
+
+            writer.db.execute("BEGIN")
+            try:
+                digest = verify_protected_journal(
+                    writer.db, writer.opening_cash
+                )
+                writer.db.execute("COMMIT")
+            except BaseException:
+                writer.db.rollback()
+                raise
+            write_anchor(anchor, create_anchor(1, digest, key), key)
+
+            reader = DurableLedger(
+                database, checkpoint_path=anchor, checkpoint_key=key
+            )
+            self.addCleanup(reader.close)
+            self.assertEqual(
+                reader.balances()[0], Decimal("990.00")
+            )
+
+            replacement = DurableLedger(
+                alternate, opening_cash="1000.00"
+            )
+            self.addCleanup(replacement.close)
+            replacement.record_buy(
+                "different-history", "1", "20.00"
+            )
+
+            # Replace the database with another internally valid history.
+            replacement.db.backup(writer.db)
+            self.assertEqual(
+                writer.db.execute(
+                    "SELECT COUNT(*) FROM ledger_entries"
+                ).fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                writer.balances()[0], Decimal("980.00")
+            )
+
+            with self.assertRaisesRegex(
+                ValueError, "Checkpoint digest mismatch"
+            ):
+                reader.balances()
+            self.assertFalse(reader.db.in_transaction)
+
+
 if __name__ == "__main__":
     unittest.main()
