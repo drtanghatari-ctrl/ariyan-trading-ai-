@@ -18,7 +18,7 @@ A006 remains in progress. A007 has not started.
 
 ## Observed Termux evidence
 
-Full regression suite: 203 tests passed.
+Full regression suite: 209 tests passed.
 git diff --check: passed.
 
 Coordinator integration covers BUY/SELL, verified reopening,
@@ -38,8 +38,11 @@ They do not simulate storage-device power failure.
 
 ## Boundaries and remaining work
 
-The default demo still uses the original float-based PaperEngine.
-The Decimal coordinator is not integrated into that demo.
+The default module demo now uses the Decimal coordinator and
+authenticated reopening. Its disposable synthetic BUY/SELL example
+finishes with cash 10001.00, zero units, and checkpoint sequence 2.
+A fresh-process integration test verifies this executable path.
+The legacy PaperEngine remains available separately.
 
 The coordinator accepts explicit paper quantities. It does not
 implement portfolio risk sizing, fees, slippage, forecasting,
@@ -54,6 +57,9 @@ independent rollback-resistant evidence. Secure key custody,
 rotation, revocation, authenticated recovery, complete attempt
 history, and application lifecycle integration remain unfinished.
 
-Further testing is required for commit errors, rollback errors,
-marker-clearance failures, and other I/O boundaries.
+Five additional tests model commit errors before and after application,
+including marker-clearance commit errors and marker deletion failure.
+If clearance committed before an error was reported, the completed
+checkpoint remains verifiable; the same request cannot execute twice.
+Further testing is required for rollback errors and other I/O boundaries.
 Passing these tests does not certify production readiness.
