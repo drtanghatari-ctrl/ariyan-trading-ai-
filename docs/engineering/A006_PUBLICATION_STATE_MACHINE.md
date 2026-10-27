@@ -1,6 +1,6 @@
 # A006 publication state machine
 
-Status: Decision model only; coordinator not implemented.
+Status: Pure decision model; experimental paper coordinator separately implemented.
 
 Successful ordering:
 READY -> COMMITTED -> PUBLISHING -> DURABLE.
@@ -20,9 +20,10 @@ leaves the attempt UNCERTAIN even if the replacement is readable.
 A database commit and external anchor replacement are not atomic.
 A committed database change is not undone by publication failure.
 No automatic retry, repair, recovery, or re-anchoring is provided.
-No persistent attempt log or restart reconciliation is implemented.
+The coordinator persists a pending marker with the trade. Complete attempt
+history and authorized restart reconciliation remain unimplemented.
 
-Remaining work includes coordinator integration, durable attempt
+Remaining work includes application integration, complete attempt
 records, recovery authorization, key custody, independent rollback
 resistance, and crash testing of the integrated workflow.
 

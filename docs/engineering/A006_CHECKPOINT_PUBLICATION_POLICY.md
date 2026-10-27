@@ -1,6 +1,6 @@
 # A006 — Checkpoint Publication and Recovery Policy
 
-Status: Design policy only; not an implemented publication protocol.
+Status: Experimental paper coordinator implemented; full A006 certification pending.
 Date: 2026-10-22
 
 ## Established implementation
@@ -52,18 +52,18 @@ Date: 2026-10-22
 
 ## Remaining engineering work
 
-- Define an explicit publication state machine.
-- Establish transaction and checkpoint ordering.
+- Extend the implemented publication state machine as lifecycle requirements evolve.
+- Integrate the tested paper coordinator ordering into the application lifecycle.
 - Define authenticated recovery authorization.
-- Add crash and interruption failure-injection tests.
+- Extend the implemented fault-injection and SIGKILL tests to additional failure boundaries.
 - Establish key custody, rotation, and revocation.
 - Establish independent rollback resistance.
 - Verify integration with the complete trading lifecycle.
 
 ## Certification boundary
 
-This document specifies safety requirements. It does not
-implement crash-consistent publication, automated recovery,
-or production-ready checkpoint management.
+This document specifies safety requirements. The experimental paper coordinator implements tested publication ordering
+and persistent pending markers. Automated recovery and production-ready
+checkpoint management remain unimplemented.
 
 A006 remains in progress. A007 has not started.
