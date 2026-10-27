@@ -5,6 +5,10 @@ from pathlib import Path
 
 from .checkpoint_verifier import verify_checkpoint
 from .ledger_validation import exact_cash
+from .ledger_identity import (
+    initialize_ledger_identity,
+    read_ledger_identity,
+)
 from .initialization_lock import initialization_lock
 from .schema_validation import validate_ledger_schema
 from .journal_store import (
@@ -78,6 +82,7 @@ class DurableLedger:
                     raise ValueError("Opening cash mismatch")
 
             self.opening_cash = amount
+            self.ledger_identity = read_ledger_identity(self.db)
             self.journal_protection = protection_status(self.db)
 
             if self.journal_protection != "protected":
@@ -213,6 +218,8 @@ class DurableLedger:
             validate_ledger_schema(self.db)
             if new_database:
                 create_protected_journal(self.db, amount)
+                initialize_ledger_identity(self.db)
+            self.ledger_identity = read_ledger_identity(self.db)
             self.opening_cash = amount
             self.journal_protection = protection_status(self.db)
             if self.journal_protection == "protected":

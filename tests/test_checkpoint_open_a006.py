@@ -64,6 +64,39 @@ class CheckpointOpeningTests(unittest.TestCase):
         finally:
             ledger.db.close()
 
+    def test_authenticated_reopen_preserves_ledger_identity(self):
+        self.create_ledger()
+
+        original = DurableLedger(self.database)
+        try:
+            identity = original.ledger_identity
+            self.assertIsNotNone(identity)
+        finally:
+            original.db.close()
+
+        self.publish_checkpoint()
+
+        verified = DurableLedger(
+            self.database,
+            checkpoint_path=self.anchor,
+            checkpoint_key=KEY,
+        )
+        try:
+            self.assertTrue(verified.checkpoint_read_only)
+            self.assertEqual(verified.ledger_identity, identity)
+            self.assertEqual(
+                verified.balances()[0],
+                Decimal("1000.00"),
+            )
+        finally:
+            verified.db.close()
+
+        reopened = DurableLedger(self.database)
+        try:
+            self.assertEqual(reopened.ledger_identity, identity)
+        finally:
+            reopened.db.close()
+
     def test_missing_checkpoint_rejected(self):
         self.create_ledger()
         with self.assertRaises(FileNotFoundError):
