@@ -92,7 +92,7 @@ class TrustRecordValidationTests(unittest.TestCase):
 
     def test_authority_invalid_unicode(self):
         self.assertFalse(validate_trust_record(
-            replace(self.record(), authority_id="invalid\\ud800")
+            replace(self.record(), authority_id="invalid" + chr(0xD800))
         ))
 
     def test_zero_revision(self):
