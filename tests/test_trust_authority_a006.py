@@ -1,7 +1,11 @@
 """A006-WB02-P3C4 trust interface tests."""
 
 import unittest
+from dataclasses import replace
 
+from ariyan_trading.trust_record_validation import (
+    TRUST_RECORD_VERSION,
+)
 from ariyan_trading.trust_authority import (
     TrustLookup,
     TrustLookupStatus as Status,
@@ -20,7 +24,7 @@ class TrustAuthorityTests(unittest.TestCase):
             writer_policy_version="ARIYAN-A006-WRITER-POLICY-V1",
             authority_id="test-authority",
             revision=1,
-            record_version="v1",
+            record_version=TRUST_RECORD_VERSION,
         )
 
     def test_authenticated_present(self):
@@ -138,6 +142,72 @@ class TrustAuthorityTests(unittest.TestCase):
         lookup = TrustLookup(
             status=Status.ABSENT,
             history_complete=1,
+            authenticated=True,
+        )
+        self.assertEqual(
+            classify_trust_lookup(lookup), Status.INVALID
+        )
+
+
+    def test_present_rejects_wrong_record_version(self):
+        lookup = TrustLookup(
+            status=Status.PRESENT,
+            record=replace(
+                self.record(),
+                record_version="unsupported",
+            ),
+            authenticated=True,
+        )
+        self.assertEqual(
+            classify_trust_lookup(lookup), Status.INVALID
+        )
+
+    def test_present_rejects_malformed_digest(self):
+        lookup = TrustLookup(
+            status=Status.PRESENT,
+            record=replace(
+                self.record(),
+                enrollment_digest="invalid",
+            ),
+            authenticated=True,
+        )
+        self.assertEqual(
+            classify_trust_lookup(lookup), Status.INVALID
+        )
+
+    def test_present_rejects_invalid_ledger_identity(self):
+        lookup = TrustLookup(
+            status=Status.PRESENT,
+            record=replace(
+                self.record(),
+                ledger_id="not-a-uuid",
+            ),
+            authenticated=True,
+        )
+        self.assertEqual(
+            classify_trust_lookup(lookup), Status.INVALID
+        )
+
+    def test_present_rejects_negative_revision(self):
+        lookup = TrustLookup(
+            status=Status.PRESENT,
+            record=replace(
+                self.record(),
+                revision=-1,
+            ),
+            authenticated=True,
+        )
+        self.assertEqual(
+            classify_trust_lookup(lookup), Status.INVALID
+        )
+
+    def test_present_rejects_invalid_authority(self):
+        lookup = TrustLookup(
+            status=Status.PRESENT,
+            record=replace(
+                self.record(),
+                authority_id="",
+            ),
             authenticated=True,
         )
         self.assertEqual(

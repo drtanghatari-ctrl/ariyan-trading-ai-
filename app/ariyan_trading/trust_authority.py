@@ -71,6 +71,14 @@ def classify_trust_lookup(lookup: TrustLookup) -> TrustLookupStatus:
         ):
             return TrustLookupStatus.INVALID
 
+        # Local import avoids the TrustRecord definition cycle.
+        from ariyan_trading.trust_record_validation import (
+            validate_trust_record,
+        )
+
+        if not validate_trust_record(lookup.record):
+            return TrustLookupStatus.INVALID
+
         return TrustLookupStatus.PRESENT
 
     if lookup.status is TrustLookupStatus.ABSENT:
