@@ -152,3 +152,77 @@ def verify_history_store(db, stream_id):
         previous = expected_digest
 
     return len(entries), previous
+
+
+def append_history_entry(db, stream_id, entry):
+    """Append one entry and commitment in a caller-owned transaction.
+
+    Caller must acquire a SQLite write transaction using BEGIN IMMEDIATE
+    before invoking this function, and must COMMIT or ROLLBACK afterward.
+
+    This function does not authenticate authorization evidence or
+    independently prevent history rollback.
+    """
+
+    from ariyan_trading.authorization_status_history import (
+        canonical_status_history_entry,
+        validate_status_history_entry,
+    )
+
+    if not db.in_transaction:
+        raise ValueError("Active SQLite transaction required")
+
+    if not validate_status_history_entry(entry):
+        raise ValueError("Invalid authorization-history entry")
+
+    if entry.stream_id != stream_id:
+        raise ValueError("Authorization-history stream mismatch")
+
+    # Acquire SQLite's writer reservation before verifying history.
+    # This also works when the caller began a deferred transaction,
+    # provided it can be upgraded to a writer.
+    db.execute(
+        "UPDATE authorization_history_meta "
+        "SET value=value WHERE key='version'"
+    )
+
+    sequence, previous_digest = verify_history_store(db, stream_id)
+
+    expected_sequence = sequence + 1
+
+    if entry.history_sequence != expected_sequence:
+        raise ValueError("Authorization-history sequence mismatch")
+
+    payload = canonical_status_history_entry(entry)
+
+    next_digest = entry_history_commitment(previous_digest, entry)
+
+    db.execute("SAVEPOINT authorization_history_append")
+
+    try:
+        db.execute(
+            "INSERT INTO authorization_history_entries "
+            "(history_sequence,payload) VALUES (?,?)",
+            (expected_sequence, payload),
+        )
+
+        db.execute(
+            "INSERT INTO authorization_history_commitments "
+            "(history_sequence,digest) VALUES (?,?)",
+            (expected_sequence, next_digest),
+        )
+
+    except BaseException:
+        try:
+            db.execute(
+                "ROLLBACK TO SAVEPOINT authorization_history_append"
+            )
+        finally:
+            db.execute(
+                "RELEASE SAVEPOINT authorization_history_append"
+            )
+        raise
+
+    db.execute("RELEASE SAVEPOINT authorization_history_append")
+
+    return expected_sequence, next_digest
