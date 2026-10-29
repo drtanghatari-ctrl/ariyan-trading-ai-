@@ -20,14 +20,110 @@ from ariyan_trading.authorization_status_history_decoder import (
 STORE_VERSION = "ARIYAN-A006-AUTH-HISTORY-STORE-V1"
 
 
+_EXPECTED_TABLE_SQL = {
+    "authorization_history_meta": (
+        "CREATE TABLE authorization_history_meta ("
+        "key TEXT PRIMARY KEY, "
+        "value TEXT NOT NULL)"
+    ),
+    "authorization_history_entries": (
+        "CREATE TABLE authorization_history_entries ("
+        "history_sequence INTEGER PRIMARY KEY, "
+        "payload BLOB NOT NULL)"
+    ),
+    "authorization_history_commitments": (
+        "CREATE TABLE authorization_history_commitments ("
+        "history_sequence INTEGER PRIMARY KEY, "
+        "digest TEXT NOT NULL)"
+    ),
+}
+
+
 def _table_names(db):
     return {
         row[0]
         for row in db.execute(
             "SELECT name FROM sqlite_master "
-            "WHERE type='table' AND name LIKE 'authorization_history_%'"
+            "WHERE type='table'"
         )
+        if row[0].startswith("authorization_history_")
     }
+
+
+def _reject_temporary_history_objects(db):
+    """Reject temporary objects occupying the protected history namespace."""
+    temporary_objects = db.execute(
+        "SELECT type,name,tbl_name FROM sqlite_temp_master"
+    ).fetchall()
+
+    for kind, name, table_name in temporary_objects:
+        if (
+            name.startswith("authorization_history_")
+            or table_name.startswith("authorization_history_")
+        ):
+            raise ValueError(
+                "Unexpected temporary authorization-history schema object"
+            )
+
+
+def _verify_history_schema(db):
+    objects = db.execute(
+        "SELECT type,name,tbl_name,sql FROM sqlite_master"
+    ).fetchall()
+
+    _reject_temporary_history_objects(db)
+
+    protected = [
+        (kind, name, table_name, sql)
+        for kind, name, table_name, sql in objects
+        if (
+            name.startswith("authorization_history_")
+            or table_name.startswith("authorization_history_")
+        )
+    ]
+
+    tables = {
+        name: sql
+        for kind, name, _, sql in protected
+        if kind == "table"
+    }
+
+    if tables != _EXPECTED_TABLE_SQL:
+        raise ValueError(
+            "Authorization-history table definitions mismatch"
+        )
+
+    metadata_indexes = db.execute(
+        "PRAGMA index_list('authorization_history_meta')"
+    ).fetchall()
+
+    if (
+        len(metadata_indexes) != 1
+        or metadata_indexes[0][1]
+        != "sqlite_autoindex_authorization_history_meta_1"
+        or metadata_indexes[0][2] != 1
+        or metadata_indexes[0][3] != "pk"
+        or metadata_indexes[0][4] != 0
+    ):
+        raise ValueError(
+            "Authorization-history metadata primary-key index mismatch"
+        )
+
+    for kind, name, table_name, sql in protected:
+        if kind == "table":
+            continue
+
+        if (
+            kind == "index"
+            and name == "sqlite_autoindex_authorization_history_meta_1"
+            and table_name == "authorization_history_meta"
+            and sql is None
+        ):
+            continue
+
+        raise ValueError(
+            "Unexpected authorization-history schema object"
+        )
 
 
 def initialize_history_store(db, stream_id):
@@ -37,6 +133,8 @@ def initialize_history_store(db, stream_id):
         raise ValueError("Active SQLite transaction required")
 
     genesis = opening_history_commitment(stream_id)
+
+    _reject_temporary_history_objects(db)
 
     if _table_names(db):
         raise ValueError("Authorization-history tables already exist")
@@ -85,6 +183,8 @@ def verify_history_store(db, stream_id):
 
     if _table_names(db) != expected_tables:
         raise ValueError("Incomplete authorization-history schema")
+
+    _verify_history_schema(db)
 
     metadata = db.execute(
         "SELECT key,value FROM authorization_history_meta"

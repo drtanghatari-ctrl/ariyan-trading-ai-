@@ -218,22 +218,34 @@ class AuthorizationHistoryAppendAtomicityTests(
     verify = AuthorizationStatusHistoryAppendTests.verify
 
     def test_commitment_insert_failure_rolls_back_entry(self):
-        self.db.execute(
-            "CREATE TRIGGER reject_history_commitment "
-            "BEFORE INSERT ON authorization_history_commitments "
-            "BEGIN "
-            "SELECT RAISE(ABORT, 'injected commitment failure'); "
-            "END"
-        )
+        denied = []
+
+        def authorizer(action, arg1, arg2, db_name, source):
+            if (
+                action == sqlite3.SQLITE_INSERT
+                and arg1 == "authorization_history_commitments"
+            ):
+                denied.append(arg1)
+                return sqlite3.SQLITE_DENY
+
+            return sqlite3.SQLITE_OK
 
         self.db.execute("BEGIN IMMEDIATE")
 
-        with self.assertRaises(sqlite3.DatabaseError):
-            append_history_entry(
-                self.db,
-                self.stream_id,
-                self.entry(1),
-            )
+        self.db.set_authorizer(authorizer)
+
+        try:
+            with self.assertRaises(sqlite3.DatabaseError):
+                append_history_entry(
+                    self.db,
+                    self.stream_id,
+                    self.entry(1),
+                )
+        finally:
+            self.db.set_authorizer(None)
+
+        self.assertTrue(denied)
+        self.assertTrue(self.db.in_transaction)
 
         entry_count = self.db.execute(
             "SELECT COUNT(*) FROM authorization_history_entries"
@@ -249,7 +261,6 @@ class AuthorizationHistoryAppendAtomicityTests(
         self.db.execute("ROLLBACK")
 
         self.assertEqual(self.verify()[0], 0)
-
 
     def test_deferred_transaction_acquires_writer(self):
         self.db.execute("BEGIN")
@@ -279,22 +290,31 @@ class AuthorizationHistoryAppendAtomicityTests(
             self.entry(1),
         )
 
-        self.db.execute(
-            "CREATE TEMP TRIGGER reject_second_history_commitment "
-            "BEFORE INSERT ON authorization_history_commitments "
-            "WHEN NEW.history_sequence = 2 "
-            "BEGIN "
-            "SELECT RAISE(ABORT, 'injected second commitment failure'); "
-            "END"
-        )
+        denied = []
 
-        with self.assertRaises(sqlite3.DatabaseError):
-            append_history_entry(
-                self.db,
-                self.stream_id,
-                self.entry(2),
-            )
+        def authorizer(action, arg1, arg2, db_name, source):
+            if (
+                action == sqlite3.SQLITE_INSERT
+                and arg1 == "authorization_history_commitments"
+            ):
+                denied.append(arg1)
+                return sqlite3.SQLITE_DENY
 
+            return sqlite3.SQLITE_OK
+
+        self.db.set_authorizer(authorizer)
+
+        try:
+            with self.assertRaises(sqlite3.DatabaseError):
+                append_history_entry(
+                    self.db,
+                    self.stream_id,
+                    self.entry(2),
+                )
+        finally:
+            self.db.set_authorizer(None)
+
+        self.assertTrue(denied)
         self.assertTrue(self.db.in_transaction)
 
         entry_count = self.db.execute(
