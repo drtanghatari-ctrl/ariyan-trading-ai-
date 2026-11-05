@@ -1,0 +1,17 @@
+{
+  "archive_sha256": "2ec7867e1dc5454505b39898a15a06bad23142114ea917f87ef013b58867969a",
+  "archive_url": "https://data.binance.vision/data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2024-01-01.zip",
+  "checksum_url": "https://data.binance.vision/data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2024-01-01.zip.CHECKSUM",
+  "csv_sha256": "820612cdfeb2c9370c3d92ae8ad673c6b93599bb94119b877dde4b586b081d3b",
+  "date_utc": "2024-01-01",
+  "description": "Real Binance public spot candles; 24 hourly bars, smoke check only",
+  "interval_ms": 3600000,
+  "proves_profitability": false,
+  "provider_documentation": "https://github.com/binance/binance-public-data",
+  "published_archive_checksum_matched": true,
+  "published_checksum_text": "2ec7867e1dc5454505b39898a15a06bad23142114ea917f87ef013b58867969a  BTCUSDT-1h-2024-01-01.zip",
+  "retrieval_session_date": "2026-11-05",
+  "source_independently_authenticated": false,
+  "symbol": "BTCUSDT",
+  "timestamp_unit": "ms"
+}
