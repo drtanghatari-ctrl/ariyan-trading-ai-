@@ -1,0 +1,30 @@
+{
+  "archive_note": "A matching provider checksum verifies bytes, not complete regular coverage or trading availability.",
+  "archive_sha256": "8cd20f5058dc7585cfa874a3ab0e5fd0096f369c182d8fda80dc16495050e018",
+  "as_of_ms": 1614556800000,
+  "checksum_url": "https://data.binance.vision/data/spot/monthly/klines/BTCUSDT/1h/BTCUSDT-1h-2021-02.zip.CHECKSUM",
+  "description": "Five exact source rows 242..246; derived real-data intake fixture, not full provider CSV",
+  "excerpt_sha256": "e4edb94155451d9c23325b08c03b95aa2853e54c238a9b6131ef1501de10d476",
+  "expected_excerpt_complete_rows": 4,
+  "expected_excluded_rows": 1,
+  "expected_missing_rows": 1,
+  "expected_spans": [
+    2,
+    2
+  ],
+  "full_source_csv_sha256": "f1f58bca732ef478caf90973cfa18ac9aa3a5e380037028095aff8acfbc1a62b",
+  "interval_ms": 3600000,
+  "proves_profitability": false,
+  "published_archive_checksum_matched": true,
+  "source_csv_lines": [
+    242,
+    243,
+    244,
+    245,
+    246
+  ],
+  "source_independently_authenticated": false,
+  "source_url": "https://data.binance.vision/data/spot/monthly/klines/BTCUSDT/1h/BTCUSDT-1h-2021-02.zip",
+  "symbol": "BTCUSDT",
+  "timestamp_unit": "ms"
+}
