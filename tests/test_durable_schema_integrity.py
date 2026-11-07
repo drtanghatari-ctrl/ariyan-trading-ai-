@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,7 +17,7 @@ class DurableSchemaIntegrityTests(unittest.TestCase):
             ledger.record_buy("buy-1", "1", "10")
             ledger.close()
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute("DROP TABLE ledger_entries")
 
             with self.assertRaises(ValueError):

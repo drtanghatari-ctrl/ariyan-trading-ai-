@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,7 +17,7 @@ class DurableRecoveryTests(unittest.TestCase):
             ledger.record_buy("buy-1", "1", "10")
             ledger.close()
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "UPDATE ledger_entries "
                     "SET cash_delta='-1.00'"
@@ -33,7 +34,7 @@ class DurableRecoveryTests(unittest.TestCase):
             ledger.record_buy("buy-1", "1", "10")
             ledger.close()
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "UPDATE ledger_entries "
                     "SET units_delta='100'"
@@ -51,7 +52,7 @@ class DurableRecoveryTests(unittest.TestCase):
             ledger.record_buy("buy-2", "1", "10")
             ledger.close()
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "DELETE FROM ledger_entries "
                     "WHERE sequence=1"

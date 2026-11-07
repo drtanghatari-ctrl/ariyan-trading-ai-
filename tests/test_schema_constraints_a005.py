@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import unittest
 
 from ariyan_trading.schema_validation import validate_ledger_schema
@@ -82,7 +83,7 @@ class SchemaConstraintsA005Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "legacy_a004.sqlite"
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "CREATE TABLE ledger_meta ("
                     "key TEXT PRIMARY KEY, "

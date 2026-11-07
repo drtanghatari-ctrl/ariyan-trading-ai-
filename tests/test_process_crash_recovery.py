@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import subprocess
 import sys
 import tempfile
@@ -47,7 +48,7 @@ os._exit(7)
                 msg=result.stderr,
             )
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(
                     db.execute(
                         "PRAGMA integrity_check"
@@ -103,7 +104,7 @@ os._exit(7)
                 msg=result.stderr,
             )
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(
                     db.execute(
                         "PRAGMA integrity_check"

@@ -1,6 +1,7 @@
 """A006-WB02-P3A persistent ledger identity tests."""
 
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 import uuid
@@ -62,7 +63,7 @@ class LedgerIdentityTests(unittest.TestCase):
         ledger = self.open_ledger()
         ledger.db.close()
 
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(
                 "UPDATE ledger_meta SET value=? "
                 "WHERE key='ledger_identity'",
@@ -102,7 +103,7 @@ class LedgerIdentityTests(unittest.TestCase):
         ledger = self.open_ledger()
         ledger.db.close()
 
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(
                 "DELETE FROM ledger_meta "
                 "WHERE key='ledger_identity'"

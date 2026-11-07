@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from decimal import Decimal
@@ -49,7 +50,7 @@ class DurableLedgerTests(unittest.TestCase):
             ledger = DurableLedger(path, "100.00")
             ledger.close()
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "UPDATE ledger_meta SET value='NaN' "
                     "WHERE key='opening_cash'"

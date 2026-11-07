@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +25,7 @@ class DurableIntegrityTests(unittest.TestCase):
             ledger = DurableLedger(path, "100.00")
             ledger.close()
 
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "DELETE FROM ledger_meta "
                     "WHERE key='opening_cash'"
