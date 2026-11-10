@@ -1,10 +1,8 @@
 """Governed boundary for explicit offline paper orders."""
 
 from .checkpoint_coordinator import execute_checkpointed_trade
+from .paper_execution_state import PAPER_EXECUTION_STATES, read_paper_execution_state
 from .predictability_gate import assess_new_exposure
-
-
-PAPER_EXECUTION_STATES = ("NORMAL", "STOP", "FREEZE")
 
 
 class PaperEntryDenied(RuntimeError):
@@ -26,13 +24,19 @@ class PaperExecutionDenied(RuntimeError):
 
 def execute_governed_paper_trade(
     ledger, action, request_id, quantity, price, *, anchor_path, key,
-    review_directory=None, execution_state="NORMAL",
+    review_directory=None, execution_state="NORMAL", execution_state_path=None,
 ):
-    """Apply the caller's paper state before any gate or ledger access."""
+    """Resolve the paper state before any gate or ledger access."""
     if action not in ("BUY", "SELL"):
         raise ValueError("Only explicit BUY or SELL is supported")
     if type(execution_state) is not str or execution_state not in PAPER_EXECUTION_STATES:
         raise ValueError("Unsupported paper execution state")
+    if execution_state_path is not None:
+        if execution_state != "NORMAL":
+            raise ValueError("Cannot combine an explicit paper state with a state file")
+        execution_state = read_paper_execution_state(
+            execution_state_path, getattr(ledger, "ledger_identity", None), key=key,
+        )
     if execution_state == "FREEZE" or (execution_state == "STOP" and action == "BUY"):
         raise PaperExecutionDenied(action, execution_state)
     if action == 'BUY':
