@@ -163,9 +163,10 @@ def _build(request, stage, *, existing=None, progress=None):
                     (stage / name).write_bytes(content)
                 raw_path = stage / csv_name
             else:
-                raw_path = existing / csv_name
-                if _read(raw_path, MAX_BYTES) != raw:
+                if _read(existing / csv_name, MAX_BYTES) != raw:
                     raise ValueError('Stored source CSV differs from verified archive')
+                raw_path = stage / csv_name
+                raw_path.write_bytes(raw)
             unit = 'us' if month_index >= _month('2025-01') else 'ms'
             dataset = load_candles(raw_path, symbol=request.symbol,
                                    interval_ms=INTERVALS[request.interval], source=request.source_label,

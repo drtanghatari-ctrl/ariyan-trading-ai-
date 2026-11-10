@@ -7,7 +7,9 @@ import json
 import time
 from decimal import Decimal
 from pathlib import Path
+from zipfile import BadZipFile
 
+from .binance_archive import verify_snapshot
 from .evaluation import evaluate_periods
 from .market_data import integer, load_candles
 from .replay import ReplayConfig
@@ -20,6 +22,7 @@ VERSION = "ARIYAN-A037-VALIDATION-EVALUATION-V1"
 SOURCE_RECORD_VERSION = "ARIYAN-A041-VALIDATION-EVALUATION-V1"
 WITNESS_RECORD_VERSION = "ARIYAN-A044-VALIDATION-EVALUATION-V1"
 TIMESTAMP_RECORD_VERSION = "ARIYAN-A046-VALIDATION-EVALUATION-V1"
+ARCHIVE_RECORD_VERSION = "ARIYAN-A047-VALIDATION-EVALUATION-V1"
 
 
 def _check_scenario(evaluation, scenario, criteria):
@@ -52,7 +55,8 @@ def _check_scenario(evaluation, scenario, criteria):
 
 def evaluate_plan(plan, csv_path, *, as_of_ms, require_engine_source=False,
                   record_engine_source=False, witness_receipt_path=None,
-                  witness_public_key_hex=None, record_witness_receipt=False):
+                  witness_public_key_hex=None, record_witness_receipt=False,
+                  binance_snapshot=None):
     """Run A008 from candle bytes and grade both scenarios against the plan."""
     plan = verify_plan(plan)
     spec = plan["spec"]
@@ -73,7 +77,22 @@ def evaluate_plan(plan, csv_path, *, as_of_ms, require_engine_source=False,
         checked_paths = verify_engine_sources(
             Path(__file__).resolve().parents[2], spec["code_commit"],
         )
+    if (csv_path is None) == (binance_snapshot is None):
+        raise ValueError("Supply either a CSV or a Binance snapshot")
+    if binance_snapshot is not None:
+        snapshot = verify_snapshot(binance_snapshot)
+        snapshot_data = snapshot["dataset"]
+        market = spec["market"]
+        if (snapshot["instrument"]["symbol"] != market["symbol"]
+                or any(snapshot_data[field] != market[field] for field in (
+                    "input_format", "timestamp_unit", "interval_ms",
+                ))
+                or (snapshot_data["first_open_ms"], snapshot_data["last_close_ms"]) != (start, end)):
+            raise ValueError("Binance snapshot market or coverage differs from the frozen plan")
+        csv_path = Path(binance_snapshot) / snapshot_data["file"]
     dataset = load_candles(csv_path, as_of_ms=end, **spec["market"])
+    if binance_snapshot is not None and dataset.raw_sha256 != snapshot_data["raw_sha256"]:
+        raise ValueError("Candle bytes differ from the verified Binance snapshot")
     first_open = dataset.candles[0].timestamp_ms
     last_close = dataset.candles[-1].timestamp_ms + dataset.interval_ms
     if first_open != start or last_close != end:
@@ -114,13 +133,28 @@ def evaluate_plan(plan, csv_path, *, as_of_ms, require_engine_source=False,
             **witness_check,
             "receipt_sha256": hashlib.sha256(canonical_receipt).hexdigest(),
         }
+    if binance_snapshot is not None:
+        canonical_manifest = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode(
+            "ascii"
+        )
+        report["version"] = ARCHIVE_RECORD_VERSION
+        report["archive_snapshot_check"] = {
+            "status": "RETAINED_BINANCE_ARCHIVES_REVERIFIED",
+            "manifest_sha256": hashlib.sha256(canonical_manifest).hexdigest(),
+            "candle_csv_sha256": dataset.raw_sha256,
+            "instrument": snapshot["instrument"],
+            "source_label": snapshot["source_label"],
+            "source_independently_authenticated": False,
+        }
     return report
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
-    parser.add_argument("--csv", type=Path, required=True)
+    candles = parser.add_mutually_exclusive_group(required=True)
+    candles.add_argument("--csv", type=Path)
+    candles.add_argument("--binance-snapshot", type=Path, help="Require a retained A010 snapshot")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--output", type=Path, help="Write a new evaluation report")
     mode.add_argument("--verify-report", type=Path, help="Reproduce a saved evaluation report")
@@ -175,9 +209,11 @@ def main(argv=None):
             witness_receipt_path=args.witness_receipt,
             witness_public_key_hex=args.witness_public_key_hex,
             record_witness_receipt=args.record_witness_receipt,
+            binance_snapshot=args.binance_snapshot,
         )
         if use_timestamp:
-            report["version"] = TIMESTAMP_RECORD_VERSION
+            if args.binance_snapshot is None:
+                report["version"] = TIMESTAMP_RECORD_VERSION
             report["plan_timestamp_check"] = timestamp_check
         encoded = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode(
             "ascii"
@@ -189,7 +225,7 @@ def main(argv=None):
         else:
             with args.output.open("xb") as stream:
                 stream.write(encoded)
-    except (OSError, ValueError, ArithmeticError, csv.Error, RuntimeError) as exc:
+    except (OSError, ValueError, ArithmeticError, csv.Error, RuntimeError, BadZipFile) as exc:
         parser.exit(2, f"Validation evaluation rejected: {exc}\n")
 
     if args.verify_report is not None:
