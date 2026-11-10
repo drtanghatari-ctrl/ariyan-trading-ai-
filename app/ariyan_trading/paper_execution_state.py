@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 
 from .ledger_identity import validate_ledger_identity
@@ -42,13 +43,21 @@ def create_paper_execution_state(path, ledger_identity, execution_state, *, key)
         os.fsync(stream.fileno())
 
 
-def read_paper_execution_state(path, ledger_identity, *, key):
-    """Verify the canonical state record for the expected ledger."""
+def read_paper_execution_state(path, ledger_identity, *, key, expected_sha256=None):
+    """Verify the state record and, when supplied, its independently retained hash."""
+    if expected_sha256 is not None and (
+        type(expected_sha256) is not str or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
+    ):
+        raise ValueError("Expected paper execution state SHA-256 must be lowercase hex")
     validate_ledger_identity(ledger_identity)
     with Path(path).open("rb") as stream:
         data = stream.read(MAX_STATE_BYTES + 1)
     if len(data) > MAX_STATE_BYTES:
         raise ValueError("Paper execution state exceeds maximum size")
+    if expected_sha256 is not None and not hmac.compare_digest(
+        hashlib.sha256(data).hexdigest(), expected_sha256,
+    ):
+        raise ValueError("Paper execution state differs from the expected SHA-256")
     try:
         record = json.loads(data.decode("ascii"))
     except (ValueError, RecursionError) as exc:
