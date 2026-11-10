@@ -1,5 +1,6 @@
 """Disposable offline demo using the protected Decimal paper ledger."""
 
+import argparse
 from pathlib import Path
 from secrets import token_bytes
 from tempfile import TemporaryDirectory
@@ -7,10 +8,11 @@ from tempfile import TemporaryDirectory
 from .checkpoint_coordinator import execute_checkpointed_trade
 from .durable_ledger import DurableLedger
 from .journal_store import verify_protected_journal
+from .paper_entry import PaperEntryDenied, execute_governed_paper_trade
 from .trust_anchor import create_anchor, write_anchor
 
 
-def main():
+def main(*, governed=False):
     with TemporaryDirectory(prefix="ariyan-paper-demo-") as directory:
         root = Path(directory)
         database = root / "demo.sqlite"
@@ -36,7 +38,22 @@ def main():
                 ledger, "BUY", "demo-buy", "1", "100.00",
                 anchor_path=anchor, key=key,
             )
-            result = execute_checkpointed_trade(
+            sell = execute_checkpointed_trade
+            if governed:
+                # The first trade seeded an existing position for this demo.
+                # Subsequent orders use the governed boundary.
+                try:
+                    execute_governed_paper_trade(
+                        ledger, "BUY", "demo-blocked-buy", "1", "100.00",
+                        anchor_path=anchor, key=key,
+                    )
+                except PaperEntryDenied as exc:
+                    denial = exc.assessment
+                else:
+                    raise RuntimeError("Governed demo expected BUY to be denied")
+                sell = execute_governed_paper_trade
+
+            result = sell(
                 ledger, "SELL", "demo-sell", "1", "101.00",
                 anchor_path=anchor, key=key,
             )
@@ -51,11 +68,15 @@ def main():
         finally:
             reader.close()
 
-        print("ARIYAN TRADING AI — A006")
+        print("ARIYAN TRADING AI — A029" if governed else "ARIYAN TRADING AI — A006")
         print("MODE: DISPOSABLE OFFLINE PAPER DEMO")
         print("SYNTHETIC PRICES — NO MARKET DATA")
         print("Opening cash: 10000.00")
-        print("Paper BUY: 1 unit at 100.00")
+        if governed:
+            print("Synthetic starting position: 1 unit at 100.00")
+            print("Governed BUY:", denial["decision"], denial["reason"])
+        else:
+            print("Paper BUY: 1 unit at 100.00")
         print("Paper SELL: 1 unit at 101.00")
         print("Verified cash:", cash)
         print("Verified units:", units)
@@ -66,4 +87,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--governed", action="store_true", help="Exercise the offline paper-entry boundary",
+    )
+    main(governed=parser.parse_args().governed)
