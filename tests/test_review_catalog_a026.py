@@ -15,6 +15,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import test_development_review_a024 as fixtures
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import review_catalog as catalog
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -105,8 +107,10 @@ class ReviewCatalogA026Tests(unittest.TestCase):
         prepare.assert_not_called();self.assertEqual(keep.read_text(),'keep')
 
     def test_symlink_sources_and_missing_parent_rejected(self):
-        linked=self.root/'linked';linked.symlink_to(self.first,target_is_directory=True)
-        self.reject(reviews=[linked])
+        with self.subTest(symlink='catalog source'):
+            linked=self.root/'linked'
+            symlink_or_skip(linked, self.first, target_is_directory=True)
+            self.reject(reviews=[linked])
         with self.assertRaises(ValueError):self.build(destination=self.root/'absent/catalog')
         self.assertFalse((self.root/'absent').exists())
 

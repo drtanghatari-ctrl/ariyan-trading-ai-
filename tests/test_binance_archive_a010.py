@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import binance_archive as module
 from ariyan_trading.dataset_plan import build_dataset_plan, verify_dataset_plan
 from ariyan_trading.market_data import load_candles
@@ -237,12 +239,13 @@ class BinanceArchiveA010Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.verify_snapshot(self.output)
         path.write_bytes(original)
-        csv_path = self.output / 'candles.csv'
-        moved = self.parent / 'external.csv'
-        csv_path.rename(moved)
-        csv_path.symlink_to(moved)
-        with self.assertRaises(ValueError):
-            module.verify_snapshot(self.output)
+        with self.subTest(symlink='snapshot CSV'):
+            csv_path = self.output / 'candles.csv'
+            moved = self.parent / 'external.csv'
+            csv_path.rename(moved)
+            symlink_or_skip(csv_path, moved)
+            with self.assertRaises(ValueError):
+                module.verify_snapshot(self.output)
 
     def test_cli_offline_verify_and_invalid_fetch(self):
         self.acquire()

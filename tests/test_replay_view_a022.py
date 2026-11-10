@@ -13,6 +13,8 @@ from html.parser import HTMLParser
 from unittest.mock import patch
 
 import test_replay_batch_a021 as fixtures
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import replay_view as view
 
 
@@ -202,10 +204,14 @@ class ReplayViewA022Tests(unittest.TestCase):
         self.assertEqual(self.output.read_bytes(), b'keep')
 
     def test_symlinks_and_missing_parent_rejected(self):
-        linked = self.root/'link.json'; linked.symlink_to(self.source)
-        with self.assertRaises(ValueError): view.write_view(linked, self.output)
-        linked_output = self.root/'link.html'; linked_output.symlink_to(self.source)
-        with self.assertRaises(ValueError): view.write_view(self.source, linked_output)
+        with self.subTest(symlink='view input'):
+            linked = self.root/'link.json'
+            symlink_or_skip(linked, self.source)
+            with self.assertRaises(ValueError): view.write_view(linked, self.output)
+        with self.subTest(symlink='view output'):
+            linked_output = self.root/'link.html'
+            symlink_or_skip(linked_output, self.source)
+            with self.assertRaises(ValueError): view.write_view(self.source, linked_output)
         with self.assertRaises(ValueError): view.write_view(self.source, self.root/'absent/view.html')
         self.assertFalse((self.root/'absent').exists())
 

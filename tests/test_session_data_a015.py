@@ -9,6 +9,8 @@ from decimal import Decimal as D, localcontext, ROUND_UP, Inexact, Rounded
 from pathlib import Path
 from unittest.mock import patch
 
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading.instruments import (
     InstrumentIdentity,InstrumentSpec,AssetClass as A,ProductType as P,
     PriceDomain as PD,SettlementType as S,
@@ -180,7 +182,8 @@ class SessionDataA015Tests(unittest.TestCase):
             with self.assertRaises(ValueError):self.load(**changes)
 
     def test_symlink_source_is_not_followed_and_source_never_modified(self):
-        series=self.load();before=self.path.read_bytes();link=self.root/'linked.csv';link.symlink_to(self.path)
+        series=self.load();before=self.path.read_bytes();link=self.root/'linked.csv'
+        symlink_or_skip(link, self.path)
         with self.assertRaises(ValueError):load_session_candles(link,symbol=series.symbol,source=series.source,
             spec=series.spec,schedule=series.schedule,interval_ms=H,anchor_ms=0,first_open_ms=0,
             end_exclusive_ms=10*H,as_of_ms=10*H,price_basis=PRICE_BASIS,volume_unit='SHARE',mapping_source='SYNTHETIC')

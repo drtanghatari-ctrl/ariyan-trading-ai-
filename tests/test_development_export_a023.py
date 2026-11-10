@@ -12,6 +12,8 @@ from decimal import Inexact, localcontext
 from pathlib import Path
 from unittest.mock import patch
 
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import development_export as export
 from ariyan_trading.dataset_plan import build_dataset_plan
 from ariyan_trading.market_data import HEADER, load_candles
@@ -135,9 +137,11 @@ class DevelopmentExportA023Tests(unittest.TestCase):
             with self.assertRaises(ValueError): self.verify()
             path.unlink()
             with self.assertRaises(ValueError): self.verify()
-            path.symlink_to(self.plan_path)
-            with self.assertRaises(ValueError): self.verify()
-            path.unlink(); path.write_bytes(original)
+            with self.subTest(symlink=name):
+                symlink_or_skip(path, self.plan_path)
+                with self.assertRaises(ValueError): self.verify()
+                path.unlink()
+            path.write_bytes(original)
         extra = self.destination/'extra'
         extra.write_text('preserve')
         with self.assertRaises(ValueError): self.verify()
@@ -163,10 +167,14 @@ class DevelopmentExportA023Tests(unittest.TestCase):
     def test_missing_parent_and_symlink_paths_rejected(self):
         with self.assertRaises(ValueError): self.run_export(self.root/'missing/bundle')
         self.assertFalse((self.root/'missing').exists())
-        link = self.root/'linked.csv'; link.symlink_to(self.csv)
-        with self.assertRaises(ValueError): export.export_development(link, self.plan_path, self.destination)
-        directory = self.root/'linked'; directory.symlink_to(self.root, target_is_directory=True)
-        with self.assertRaises(ValueError): self.run_export(directory/'bundle')
+        with self.subTest(symlink='export CSV'):
+            link = self.root/'linked.csv'
+            symlink_or_skip(link, self.csv)
+            with self.assertRaises(ValueError): export.export_development(link, self.plan_path, self.destination)
+        with self.subTest(symlink='export parent'):
+            directory = self.root/'linked'
+            symlink_or_skip(directory, self.root, target_is_directory=True)
+            with self.assertRaises(ValueError): self.run_export(directory/'bundle')
         self.assertFalse(self.destination.exists())
 
     def test_plan_and_csv_file_alias_rejected(self):

@@ -11,6 +11,8 @@ from decimal import localcontext, Inexact
 from pathlib import Path
 from unittest.mock import patch
 
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import checkpoint_diagnostic as diagnostic
 from ariyan_trading.durable_ledger import DurableLedger
 from ariyan_trading.journal_store import verify_protected_journal
@@ -153,10 +155,11 @@ class CheckpointDiagnosticA020Tests(unittest.TestCase):
         for path in (self.root / "missing", self.root):
             with self.assertRaises((ValueError, OSError)):
                 self.inspect(database=path)
-        alias = self.root / "alias"
-        alias.symlink_to(self.database)
-        with self.assertRaises(ValueError):
-            self.inspect(database=alias)
+        with self.subTest(symlink='ledger database'):
+            alias = self.root / "alias"
+            symlink_or_skip(alias, self.database)
+            with self.assertRaises(ValueError):
+                self.inspect(database=alias)
         hardlink = self.root / "hardlink"
         if hasattr(os, "link"):
             os.link(self.database, hardlink)

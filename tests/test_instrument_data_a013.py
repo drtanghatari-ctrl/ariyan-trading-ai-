@@ -8,6 +8,8 @@ from decimal import Decimal as D, Inexact, Rounded, ROUND_UP, localcontext
 from pathlib import Path
 from unittest.mock import patch
 
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading.instruments import (
     InstrumentIdentity, InstrumentSpec, AssetClass as A, ProductType as P,
     PriceDomain as PD, SettlementType as S,
@@ -167,7 +169,8 @@ class InstrumentDataA013Tests(unittest.TestCase):
     def test_read_and_write_do_not_follow_symlink_paths(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);target=root/'keep';target.write_text('keep')
-            link=root/'link';link.symlink_to(target)
+            link=root/'link'
+            symlink_or_skip(link, target)
             with self.assertRaises(ValueError):read_instrument_binding(link)
             with self.assertRaises(ValueError):write_instrument_binding(link,dataset(),spec(),build())
             self.assertEqual(target.read_text(),'keep')

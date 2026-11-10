@@ -14,6 +14,8 @@ from unittest.mock import patch
 
 import test_development_export_a023 as fixtures
 from test_session_replay_a017 import series as terms_fixture, config as configuration
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import development_review as review
 from ariyan_trading.sessions import SessionWindow
 from ariyan_trading.instruments import AssetClass, ProductType, SettlementType
@@ -149,10 +151,14 @@ class DevelopmentReviewA024Tests(unittest.TestCase):
     def test_missing_parent_and_symlink_inputs_rejected(self):
         with self.assertRaises(ValueError): self.run_review(self.root/'absent/review')
         self.assertFalse((self.root/'absent').exists())
-        linked=self.root/'linked-request.json'; linked.symlink_to(self.request_path)
-        with self.assertRaises(ValueError): review.run_development_review(linked,self.destination)
-        linked=self.root/'linked-export'; linked.symlink_to(self.fixture.destination,target_is_directory=True)
-        self.request['jobs'][0]['export_directory']=linked.name; self.save(); self.reject()
+        with self.subTest(symlink='review request'):
+            linked=self.root/'linked-request.json'
+            symlink_or_skip(linked, self.request_path)
+            with self.assertRaises(ValueError): review.run_development_review(linked,self.destination)
+        with self.subTest(symlink='export directory'):
+            linked=self.root/'linked-export'
+            symlink_or_skip(linked, self.fixture.destination, target_is_directory=True)
+            self.request['jobs'][0]['export_directory']=linked.name; self.save(); self.reject()
 
     def test_input_mutation_after_replay_aborts_completion(self):
         original=review.batch.run_batch

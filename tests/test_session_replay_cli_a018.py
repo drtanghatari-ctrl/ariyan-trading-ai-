@@ -12,6 +12,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_session_replay_a017 import series as synthetic_series, config as synthetic_config
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import session_replay_cli as cli
 from ariyan_trading.market_data import HEADER,load_candles
 from ariyan_trading.session_replay import run_session_replay
@@ -139,11 +141,15 @@ class SessionReplayCliA018Tests(unittest.TestCase):
             with patch.object(cli,field,1):self.rejected()
 
     def test_symlink_inputs_and_output_rejected_without_following(self):
-        linked=self.root/'linked.json';linked.symlink_to(self.instrument)
-        self.rejected(instrument=linked)
-        destination=self.root/'linked-output.json';destination.symlink_to(self.instrument)
-        before=self.instrument.read_bytes();self.rejected(output=destination)
-        self.assertEqual(self.instrument.read_bytes(),before)
+        with self.subTest(symlink='replay input'):
+            linked=self.root/'linked.json'
+            symlink_or_skip(linked, self.instrument)
+            self.rejected(instrument=linked)
+        with self.subTest(symlink='replay output'):
+            destination=self.root/'linked-output.json'
+            symlink_or_skip(destination, self.instrument)
+            before=self.instrument.read_bytes();self.rejected(output=destination)
+            self.assertEqual(self.instrument.read_bytes(),before)
 
     def test_input_change_during_replay_is_detected(self):
         original=cli.run_session_replay

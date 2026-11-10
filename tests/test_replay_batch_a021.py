@@ -14,6 +14,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_session_replay_a017 import series as fixture, config as configuration
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import replay_batch as batch
 from ariyan_trading.instruments import InstrumentIdentity, AssetClass as A, ProductType as P, SettlementType as S
 from ariyan_trading.market_data import HEADER, load_candles
@@ -211,10 +213,11 @@ class ReplayBatchA021Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_batch(self.root/'absent/report.json')
         self.assertFalse((self.root/'absent').exists())
-        linked = self.root/'linked.json'
-        linked.symlink_to(self.manifest)
-        with self.assertRaises(ValueError):
-            batch.run_batch(linked, self.output)
+        with self.subTest(symlink='batch manifest'):
+            linked = self.root/'linked.json'
+            symlink_or_skip(linked, self.manifest)
+            with self.assertRaises(ValueError):
+                batch.run_batch(linked, self.output)
         self.request['jobs'][1]['csv'] = 'crypto'
         self.save()
         self.reject()

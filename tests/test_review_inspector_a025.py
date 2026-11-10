@@ -13,6 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import test_development_review_a024 as fixtures
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading import review_inspector as inspector
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -83,10 +85,14 @@ class ReviewInspectorA025Tests(unittest.TestCase):
 
     def test_missing_symlinked_and_nonregular_artifacts_rejected(self):
         path=self.review/'REVIEW.html';raw=path.read_bytes();path.unlink();self.reject()
-        path.symlink_to(self.fixture.request_path);self.reject();path.unlink()
+        with self.subTest(symlink='review artifact'):
+            symlink_or_skip(path, self.fixture.request_path)
+            self.reject();path.unlink()
         path.mkdir();self.reject();path.rmdir();path.write_bytes(raw)
-        linked=self.root/'linked';linked.symlink_to(self.review,target_is_directory=True)
-        with self.assertRaises(ValueError):inspector.inspect_review(linked)
+        with self.subTest(symlink='review directory'):
+            linked=self.root/'linked'
+            symlink_or_skip(linked, self.review, target_is_directory=True)
+            with self.assertRaises(ValueError):inspector.inspect_review(linked)
 
     def test_rehashed_summary_inconsistency_still_rejected(self):
         complete=self.read('COMPLETE.json');complete['summary_table'][0]['filled_orders']+=1

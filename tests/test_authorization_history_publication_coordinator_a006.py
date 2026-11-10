@@ -9,6 +9,8 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
+from symlink_fixture import symlink_or_skip
+
 from ariyan_trading.authorization_history_anchor import (
     create_history_anchor,
 )
@@ -405,7 +407,7 @@ class HistoryPublicationTests(unittest.TestCase):
         )
 
         alias = database_path.parent / "database-alias.json"
-        alias.symlink_to(database_path)
+        symlink_or_skip(alias, database_path)
 
         with self.assertRaises(ValueError):
             publish_prepared_history(
