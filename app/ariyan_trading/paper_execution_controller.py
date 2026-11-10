@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from threading import Lock
 
+from .paper_active_selection import _replace_active_selection, read_paper_active_selection
 from .paper_entry import execute_governed_paper_trade
 from .paper_execution_state import read_paper_execution_state
 from .paper_state_escalation import prepare_paper_escalation
@@ -27,6 +28,31 @@ class PaperExecutionController:
         self._checkpoint_key = checkpoint_key
         self._operator_public_key = operator_public_key
         self._lock = Lock()
+        self._selector = None
+
+    @classmethod
+    def reopen(cls, selector_path, *, ledger_identity, expected_state_sha256,
+               checkpoint_key, operator_public_key):
+        """Reopen only when the stored selection matches the separately retained pin."""
+        selector = Path(selector_path).absolute()
+        state_path, pin = read_paper_active_selection(
+            selector, ledger_identity, key=checkpoint_key,
+        )
+        if type(expected_state_sha256) is not str or pin != expected_state_sha256:
+            raise ValueError("Active selection differs from the independently retained pin")
+        controller = cls(
+            state_path, ledger_identity=ledger_identity, expected_state_sha256=pin,
+            checkpoint_key=checkpoint_key, operator_public_key=operator_public_key,
+        )
+        controller._selector = selector
+        return controller
+
+    def _current_selection(self):
+        if self._selector is not None and read_paper_active_selection(
+            self._selector, self._ledger_identity, key=self._checkpoint_key,
+        ) != self._active:
+            raise ValueError("Active selection changed outside this paper controller")
+        return self._active
 
     def execute(self, ledger, action, request_id, quantity, price, *,
                 anchor_path, review_directory=None):
@@ -34,7 +60,7 @@ class PaperExecutionController:
         with self._lock:
             if getattr(ledger, "ledger_identity", None) != self._ledger_identity:
                 raise ValueError("Paper controller ledger identity mismatch")
-            path, pin = self._active
+            path, pin = self._current_selection()
             return execute_governed_paper_trade(
                 ledger, action, request_id, quantity, price,
                 anchor_path=anchor_path, key=self._checkpoint_key,
@@ -45,7 +71,7 @@ class PaperExecutionController:
     def activate_escalation(self, next_path, intent, signature):
         """Prepare and select a successor, returning its pin for the caller."""
         with self._lock:
-            path, pin = self._active
+            path, pin = self._current_selection()
             successor = Path(next_path).absolute()
             next_pin = prepare_paper_escalation(
                 path, successor, intent, signature, ledger_identity=self._ledger_identity,
@@ -53,5 +79,10 @@ class PaperExecutionController:
                 operator_public_key=self._operator_public_key,
                 as_of_ms=time.time_ns() // 1_000_000,
             )
+            if self._selector is not None:
+                _replace_active_selection(
+                    self._selector, successor, next_pin,
+                    self._ledger_identity, self._checkpoint_key,
+                )
             self._active = (successor, next_pin)
             return next_pin
