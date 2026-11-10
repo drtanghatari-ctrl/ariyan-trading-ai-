@@ -22,6 +22,7 @@ from ariyan_trading.durable_ledger import DurableLedger
 from ariyan_trading.journal_store import verify_protected_journal
 from ariyan_trading.paper_active_selection import create_paper_active_selection
 from ariyan_trading.paper_entry import PaperExecutionDenied
+from ariyan_trading.paper_pending_diagnostic import inspect_pending_paper_checkpoint
 from ariyan_trading.paper_execution_controller import PaperExecutionController
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
 from ariyan_trading.paper_state_escalation import VERSION, escalation_payload
@@ -103,6 +104,13 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
             )
             if interrupt_publication:
                 self.assertEqual(anchor.read_bytes(), seed_anchor)
+                report = inspect_pending_paper_checkpoint(
+                    database.resolve(), anchor.resolve(), selector.resolve(),
+                    expected_state_sha256=freeze_pin, key=key,
+                )
+                self.assertEqual(report["anchor_position"], "AT_PREVIOUS_VERIFIED_TIP")
+                self.assertEqual((report["anchor_sequence"], report["journal_sequence"]), (1, 2))
+                self.assertFalse(report["repair_authorized"])
                 with self.assertRaisesRegex(ValueError, "pending or uncertain"), closing(DurableLedger(
                     database, checkpoint_path=anchor, checkpoint_key=key,
                 )):
