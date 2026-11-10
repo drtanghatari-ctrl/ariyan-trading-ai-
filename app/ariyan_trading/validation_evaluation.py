@@ -85,18 +85,33 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--output", type=Path, help="Write a new evaluation report")
+    mode.add_argument("--verify-report", type=Path, help="Reproduce a saved evaluation report")
+    parser.add_argument("--expected-plan-sha256", help="Separately recorded plan fingerprint")
     args = parser.parse_args(argv)
+    if (args.verify_report is None) != (args.expected_plan_sha256 is None):
+        parser.error("--verify-report and --expected-plan-sha256 must be used together")
     try:
-        report = evaluate_plan(
-            load_plan(args.plan), args.csv, as_of_ms=time.time_ns() // 1_000_000,
+        plan = load_plan(args.plan)
+        if args.verify_report is not None and plan["plan_sha256"] != args.expected_plan_sha256:
+            raise ValueError("Plan does not match the separately recorded fingerprint")
+        report = evaluate_plan(plan, args.csv, as_of_ms=time.time_ns() // 1_000_000)
+        encoded = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode(
+            "ascii"
         )
-        encoded = json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n"
-        with args.output.open("x", encoding="utf-8", newline="\n") as stream:
-            stream.write(encoded)
+        if args.verify_report is not None:
+            with args.verify_report.open("rb") as stream:
+                if stream.read(len(encoded) + 1) != encoded:
+                    raise ValueError("Saved report differs from the reproduced report")
+        else:
+            with args.output.open("xb") as stream:
+                stream.write(encoded)
     except (OSError, ValueError, ArithmeticError, csv.Error, RecursionError) as exc:
         parser.exit(2, f"Validation evaluation rejected: {exc}\n")
 
+    if args.verify_report is not None:
+        print("REPORT_REPRODUCED")
     print("CRITERIA_MET" if report["criteria_met"] else "CRITERIA_NOT_MET")
     return 0
 
