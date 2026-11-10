@@ -10,6 +10,7 @@ from pathlib import Path
 from .evaluation import evaluate_periods
 from .market_data import integer, load_candles
 from .replay import ReplayConfig
+from .validation_engine import verify_engine_sources
 from .validation_plan import load_plan, verify_plan
 
 VERSION = "ARIYAN-A037-VALIDATION-EVALUATION-V1"
@@ -43,7 +44,7 @@ def _check_scenario(evaluation, scenario, criteria):
     }
 
 
-def evaluate_plan(plan, csv_path, *, as_of_ms):
+def evaluate_plan(plan, csv_path, *, as_of_ms, require_engine_source=False):
     """Run A008 from candle bytes and grade both scenarios against the plan."""
     plan = verify_plan(plan)
     spec = plan["spec"]
@@ -51,6 +52,8 @@ def evaluate_plan(plan, csv_path, *, as_of_ms):
     end = spec["window"]["end_ms"]
     if integer(as_of_ms, "as_of_ms") < end:
         raise ValueError("Evaluation window is still open")
+    if require_engine_source:
+        verify_engine_sources(Path(__file__).resolve().parents[2], spec["code_commit"])
     dataset = load_candles(csv_path, as_of_ms=end, **spec["market"])
     first_open = dataset.candles[0].timestamp_ms
     last_close = dataset.candles[-1].timestamp_ms + dataset.interval_ms
@@ -89,6 +92,10 @@ def main(argv=None):
     mode.add_argument("--output", type=Path, help="Write a new evaluation report")
     mode.add_argument("--verify-report", type=Path, help="Reproduce a saved evaluation report")
     parser.add_argument("--expected-plan-sha256", help="Separately recorded plan fingerprint")
+    parser.add_argument(
+        "--require-engine-source", action="store_true",
+        help="Require the local replay sources to match the plan's Git commit",
+    )
     args = parser.parse_args(argv)
     if (args.verify_report is None) != (args.expected_plan_sha256 is None):
         parser.error("--verify-report and --expected-plan-sha256 must be used together")
@@ -96,7 +103,10 @@ def main(argv=None):
         plan = load_plan(args.plan)
         if args.verify_report is not None and plan["plan_sha256"] != args.expected_plan_sha256:
             raise ValueError("Plan does not match the separately recorded fingerprint")
-        report = evaluate_plan(plan, args.csv, as_of_ms=time.time_ns() // 1_000_000)
+        report = evaluate_plan(
+            plan, args.csv, as_of_ms=time.time_ns() // 1_000_000,
+            require_engine_source=args.require_engine_source,
+        )
         encoded = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode(
             "ascii"
         )
@@ -107,7 +117,7 @@ def main(argv=None):
         else:
             with args.output.open("xb") as stream:
                 stream.write(encoded)
-    except (OSError, ValueError, ArithmeticError, csv.Error, RecursionError) as exc:
+    except (OSError, ValueError, ArithmeticError, csv.Error, RuntimeError) as exc:
         parser.exit(2, f"Validation evaluation rejected: {exc}\n")
 
     if args.verify_report is not None:
