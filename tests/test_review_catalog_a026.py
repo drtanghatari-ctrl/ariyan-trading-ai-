@@ -58,7 +58,7 @@ class ReviewCatalogA026Tests(unittest.TestCase):
             self.assertEqual(entry['summary_table'],json.loads((folder/'COMPLETE.json').read_bytes())['summary_table'])
         for name,digest in record['files_sha256'].items():
             self.assertEqual(hashlib.sha256((self.destination/name).read_bytes()).hexdigest(),digest)
-        parser=Elements();parser.feed((self.destination/'index.html').read_text())
+        parser=Elements();parser.feed((self.destination/'index.html').read_text(encoding='utf-8'))
         links=[attrs['href'] for tag,attrs in parser.items if tag=='a']
         self.assertTrue(links)
         self.assertTrue(all(re.fullmatch(r'reviews/review-[0-9]{2}\.html',link) for link in links))
@@ -77,7 +77,7 @@ class ReviewCatalogA026Tests(unittest.TestCase):
     def test_source_order_and_separate_currency_rows_preserved(self):
         record=self.build(reviews=[self.second,self.first])
         self.assertEqual(record['reviews'][0]['source_directory_label'],str(self.second))
-        raw=(self.destination/'index.html').read_text()
+        raw=(self.destination/'index.html').read_text(encoding='utf-8')
         self.assertLess(raw.index('other-synthetic-base'),raw.index('1 · second-review'))
         self.assertIn('USD',raw);self.assertIn('EUR',raw);self.assertIn('no combined portfolio',raw)
 
@@ -111,10 +111,11 @@ class ReviewCatalogA026Tests(unittest.TestCase):
         self.assertFalse((self.root/'absent').exists())
 
     def test_untrusted_folder_labels_are_escaped_and_no_active_remote_elements(self):
-        attack='<img src=x onerror=alert(1)>'
-        moved=self.root/attack;self.first.rename(moved)
-        self.build(reviews=[moved,self.second])
-        raw=(self.destination/'index.html').read_text()
+        record=self.build()
+        # Exercise the literal attack in the renderer so the filesystem need
+        # not accept angle brackets in a directory name.
+        record['reviews'][0]['display_label']='<img src=x onerror=alert(1)>'
+        raw=catalog._render(record['reviews']).decode('utf-8')
         self.assertIn('&lt;img',raw);self.assertNotIn('<img',raw)
         parser=Elements();parser.feed(raw)
         for tag,attrs in parser.items:

@@ -25,7 +25,7 @@ class DatasetPlanA009Tests(unittest.TestCase):
         self.folder = Path(folder.name)
         self.csv = self.folder / 'candles.csv'
         self.csv.write_text(','.join(HEADER) + '\n' + ''.join(
-            f'{i * 60000},100,110,90,105,1\n' for i in range(25)), encoding='utf-8')
+            f'{i * 60000},100,110,90,105,1\n' for i in range(25)), encoding='utf-8', newline='\n')
         self.options = dict(symbol='BTCUSDT', interval_ms=60000,
                             source='SYNTHETIC TEST ONLY', as_of_ms=1500000)
         self.dataset = load_candles(self.csv, **self.options)
