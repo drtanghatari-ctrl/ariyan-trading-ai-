@@ -22,6 +22,12 @@ from ariyan_trading.durable_ledger import DurableLedger
 from ariyan_trading.journal_store import verify_protected_journal
 from ariyan_trading.paper_active_selection import create_paper_active_selection
 from ariyan_trading.paper_entry import PaperExecutionDenied
+from ariyan_trading.paper_pending_clearance import (
+    ACTION as CLEARANCE_ACTION,
+    VERSION as CLEARANCE_VERSION,
+    clearance_payload,
+    clear_published_pending_marker,
+)
 from ariyan_trading.paper_pending_diagnostic import inspect_pending_paper_checkpoint
 from ariyan_trading.paper_execution_controller import PaperExecutionController
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
@@ -30,17 +36,20 @@ from ariyan_trading.trust_anchor import create_anchor, read_anchor, write_anchor
 from test_paper_process_lock_a055 import _wait_for_file
 
 
-def _sell_with_paused_publication(root):
+def _sell_with_paused_publication(root, pause_after_publication):
     configuration = json.loads((root / "child.json").read_text(encoding="utf-8"))
     for name in ("checkpoint_key", "operator_public_key"):
         configuration[name] = bytes.fromhex(configuration[name])
     controller = PaperExecutionController.reopen(root / "active.json", **configuration)
 
     def publish(*args, **kwargs):
+        if pause_after_publication:
+            write_anchor(*args, **kwargs)
         (root / "publishing").touch()
         if not _wait_for_file(root / "release", 15):
             raise AssertionError("Test did not release checkpoint publication")
-        return write_anchor(*args, **kwargs)
+        if not pause_after_publication:
+            write_anchor(*args, **kwargs)
 
     with closing(DurableLedger(root / "ledger.sqlite", opening_cash="1000.00")) as ledger:
         with patch.object(checkpoint_coordinator, "write_anchor", side_effect=publish):
@@ -54,14 +63,17 @@ def _sell_with_paused_publication(root):
 @unittest.skipIf(os.name == "nt", "Requires native A006 anchor publication")
 class PaperCheckpointRehearsalTests(unittest.TestCase):
     def test_real_sell_publishes_before_freeze_and_next_sell_cannot_write(self):
-        self.rehearse(interrupt_publication=False)
+        self.rehearse()
 
     def test_killed_publisher_leaves_pending_checkpoint_and_freeze_blocks_next_sell(self):
-        self.rehearse(interrupt_publication=True)
+        self.rehearse(interruption="before")
 
-    def rehearse(self, *, interrupt_publication):
+    def test_killed_publisher_at_journal_tip_allows_signed_clearance_under_freeze(self):
+        self.rehearse(interruption="after")
+
+    def rehearse(self, *, interruption=None):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             database, anchor = root / "ledger.sqlite", root / "anchor.json"
             state, selector = root / "normal.json", root / "active.json"
             freeze = root / "freeze.json"
@@ -96,20 +108,28 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
             seed_anchor = anchor.read_bytes()
             freeze_pin = self.activate_during_publication(
                 root, controller, freeze, intent, signature, configuration,
-                interrupt_publication=interrupt_publication,
+                interruption=interruption,
             )
 
             reopened = PaperExecutionController.reopen(
                 selector, **{**configuration, "expected_state_sha256": freeze_pin},
             )
-            if interrupt_publication:
-                self.assertEqual(anchor.read_bytes(), seed_anchor)
+            if interruption:
+                published = interruption == "after"
+                if not published:
+                    self.assertEqual(anchor.read_bytes(), seed_anchor)
                 report = inspect_pending_paper_checkpoint(
-                    database.resolve(), anchor.resolve(), selector.resolve(),
-                    expected_state_sha256=freeze_pin, key=key,
+                    database, anchor, selector, expected_state_sha256=freeze_pin, key=key,
+                    include_clearance_binding=published,
                 )
-                self.assertEqual(report["anchor_position"], "AT_PREVIOUS_VERIFIED_TIP")
-                self.assertEqual((report["anchor_sequence"], report["journal_sequence"]), (1, 2))
+                self.assertEqual(
+                    report["anchor_position"],
+                    "AT_VERIFIED_JOURNAL_TIP" if published else "AT_PREVIOUS_VERIFIED_TIP",
+                )
+                self.assertEqual(
+                    (report["anchor_sequence"], report["journal_sequence"]),
+                    (2, 2) if published else (1, 2),
+                )
                 self.assertFalse(report["repair_authorized"])
                 with self.assertRaisesRegex(ValueError, "pending or uncertain"), closing(DurableLedger(
                     database, checkpoint_path=anchor, checkpoint_key=key,
@@ -123,7 +143,7 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                     self.assertEqual(read_anchor(anchor, key)[0], 2)
 
             with closing(DurableLedger(database, opening_cash="1000.00")) as ledger:
-                if interrupt_publication:
+                if interruption:
                     self.assertIsNotNone(ledger.db.execute(
                         "SELECT value FROM ledger_meta WHERE key=?", (checkpoint_coordinator.PENDING,),
                     ).fetchone())
@@ -143,8 +163,44 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                 self.assertEqual(statements, [])
                 self.assertEqual((tuple(ledger.db.iterdump()), anchor.read_bytes()), before)
 
+            if interruption == "after":
+                clearance = {
+                    "version": CLEARANCE_VERSION, "action": CLEARANCE_ACTION,
+                    "clearance_binding_sha256": report["clearance_binding_sha256"],
+                    "expires_at_ms": time.time_ns() // 1_000_000 + 60_000,
+                }
+                frozen_files = tuple(path.read_bytes() for path in (anchor, selector, freeze))
+                result = clear_published_pending_marker(
+                    database, anchor, selector, clearance, signer.sign(clearance_payload(clearance)),
+                    expected_state_sha256=freeze_pin, checkpoint_key=key,
+                    operator_public_key=configuration["operator_public_key"],
+                )
+                self.assertEqual(result["status"], "PUBLISHED_PENDING_MARKER_CLEARED")
+                self.assertEqual(result["journal_sequence"], 2)
+                self.assertEqual(result["journal_digest"], report["journal_digest"])
+                self.assertEqual(result["paper_state"], "FREEZE")
+                self.assertFalse(result["live_authorized"])
+                self.assertEqual(
+                    tuple(path.read_bytes() for path in (anchor, selector, freeze)), frozen_files,
+                )
+
+                with closing(DurableLedger(
+                    database, checkpoint_path=anchor, checkpoint_key=key,
+                )) as reader:
+                    self.assertEqual(reader.balances(), (Decimal("991.00"), Decimal("1")))
+                    self.assertIsNone(reader.db.execute(
+                        "SELECT value FROM ledger_meta WHERE key=?", (checkpoint_coordinator.PENDING,),
+                    ).fetchone())
+                    self.assertEqual(reader.db.execute(
+                        "SELECT request_id FROM ledger_entries ORDER BY rowid",
+                    ).fetchall(), [("seed",), ("in-progress",)])
+                    with self.assertRaisesRegex(PaperExecutionDenied, "blocked by FREEZE"):
+                        reopened.execute(
+                            reader, "SELL", "after-clearance", "1", "11.00", anchor_path=anchor,
+                        )
+
     def activate_during_publication(self, root, controller, freeze, intent, signature,
-                                    configuration, *, interrupt_publication):
+                                    configuration, *, interruption):
         (root / "child.json").write_text(json.dumps({
             name: value.hex() if isinstance(value, bytes) else value
             for name, value in configuration.items()
@@ -160,14 +216,18 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
         process = subprocess.Popen(
             [sys.executable, "-c",
              "from test_paper_checkpoint_rehearsal_a056 import _sell_with_paused_publication;"
-             "from pathlib import Path; import sys; _sell_with_paused_publication(Path(sys.argv[1]))",
-             str(root)],
+             "from pathlib import Path; import sys;"
+             "_sell_with_paused_publication(Path(sys.argv[1]), sys.argv[2] == 'after')",
+             str(root), interruption or "none"],
             cwd=project, env={**os.environ, "PYTHONPATH": python_path},
         )
         release = root / "release"
         try:
             self.assertTrue(_wait_for_file(root / "publishing", 10), f"Child exit: {process.poll()}")
-            self.assertEqual(read_anchor(root / "anchor.json", configuration["checkpoint_key"])[0], 1)
+            sequence = 2 if interruption == "after" else 1
+            self.assertEqual(
+                read_anchor(root / "anchor.json", configuration["checkpoint_key"])[0], sequence,
+            )
             with closing(sqlite3.connect((root / "ledger.sqlite").as_uri() + "?mode=ro",
                                          uri=True, timeout=2)) as reader:
                 marker = reader.execute(
@@ -182,13 +242,13 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                     with self.assertRaises(TimeoutError):
                         activation.result(timeout=0.2)
                     self.assertFalse(freeze.exists())
-                    if interrupt_publication:
+                    if interruption:
                         process.kill()
                         self.assertNotEqual(process.wait(timeout=5), 0)
                 finally:
                     release.touch()
                 freeze_pin = activation.result(timeout=10)
-            if not interrupt_publication:
+            if not interruption:
                 self.assertEqual(process.wait(timeout=5), 0)
             return freeze_pin
         finally:
