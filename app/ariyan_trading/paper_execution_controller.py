@@ -1,9 +1,11 @@
 """Serialize governed paper orders and signed escalations in one controller."""
 
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from threading import Lock
 
+from .initialization_lock import initialization_lock
 from .paper_active_selection import _replace_active_selection, read_paper_active_selection
 from .paper_entry import execute_governed_paper_trade
 from .paper_execution_state import read_paper_execution_state
@@ -11,7 +13,7 @@ from .paper_state_escalation import prepare_paper_escalation
 
 
 class PaperExecutionController:
-    """Use one pinned paper state and one lock per controller instance."""
+    """Use a pinned paper state and serialize participating requests."""
 
     def __init__(self, state_path, *, ledger_identity, expected_state_sha256,
                  checkpoint_key, operator_public_key):
@@ -34,18 +36,24 @@ class PaperExecutionController:
     def reopen(cls, selector_path, *, ledger_identity, expected_state_sha256,
                checkpoint_key, operator_public_key):
         """Reopen only when the stored selection matches the separately retained pin."""
-        selector = Path(selector_path).absolute()
-        state_path, pin = read_paper_active_selection(
-            selector, ledger_identity, key=checkpoint_key,
-        )
-        if type(expected_state_sha256) is not str or pin != expected_state_sha256:
-            raise ValueError("Active selection differs from the independently retained pin")
-        controller = cls(
-            state_path, ledger_identity=ledger_identity, expected_state_sha256=pin,
-            checkpoint_key=checkpoint_key, operator_public_key=operator_public_key,
-        )
+        selector = Path(selector_path).resolve()
+        with initialization_lock(selector):
+            state_path, pin = read_paper_active_selection(
+                selector, ledger_identity, key=checkpoint_key,
+            )
+            if type(expected_state_sha256) is not str or pin != expected_state_sha256:
+                raise ValueError("Active selection differs from the independently retained pin")
+            controller = cls(
+                state_path, ledger_identity=ledger_identity, expected_state_sha256=pin,
+                checkpoint_key=checkpoint_key, operator_public_key=operator_public_key,
+            )
         controller._selector = selector
         return controller
+
+    def _selector_lock(self):
+        if self._selector is None:
+            return nullcontext()
+        return initialization_lock(self._selector)
 
     def _current_selection(self):
         if self._selector is not None and read_paper_active_selection(
@@ -57,7 +65,7 @@ class PaperExecutionController:
     def execute(self, ledger, action, request_id, quantity, price, *,
                 anchor_path, review_directory=None):
         """Submit against the active pin and hold the lock through completion."""
-        with self._lock:
+        with self._lock, self._selector_lock():
             if getattr(ledger, "ledger_identity", None) != self._ledger_identity:
                 raise ValueError("Paper controller ledger identity mismatch")
             path, pin = self._current_selection()
@@ -70,7 +78,7 @@ class PaperExecutionController:
 
     def activate_escalation(self, next_path, intent, signature):
         """Prepare and select a successor, returning its pin for the caller."""
-        with self._lock:
+        with self._lock, self._selector_lock():
             path, pin = self._current_selection()
             successor = Path(next_path).absolute()
             next_pin = prepare_paper_escalation(
