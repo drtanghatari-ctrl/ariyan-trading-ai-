@@ -12,6 +12,7 @@ from .market_data import integer, load_candles
 from .replay import ReplayConfig
 from .validation_engine import verify_engine_sources
 from .validation_plan import load_plan, verify_plan
+from .validation_witness import load_witness_receipt, verify_witness_receipt
 
 VERSION = "ARIYAN-A037-VALIDATION-EVALUATION-V1"
 SOURCE_RECORD_VERSION = "ARIYAN-A041-VALIDATION-EVALUATION-V1"
@@ -46,7 +47,8 @@ def _check_scenario(evaluation, scenario, criteria):
 
 
 def evaluate_plan(plan, csv_path, *, as_of_ms, require_engine_source=False,
-                  record_engine_source=False):
+                  record_engine_source=False, witness_receipt_path=None,
+                  witness_public_key_hex=None):
     """Run A008 from candle bytes and grade both scenarios against the plan."""
     plan = verify_plan(plan)
     spec = plan["spec"]
@@ -54,6 +56,13 @@ def evaluate_plan(plan, csv_path, *, as_of_ms, require_engine_source=False,
     end = spec["window"]["end_ms"]
     if integer(as_of_ms, "as_of_ms") < end:
         raise ValueError("Evaluation window is still open")
+    if (witness_receipt_path is None) != (witness_public_key_hex is None):
+        raise ValueError("--witness-receipt and --witness-public-key-hex must be used together")
+    if witness_receipt_path is not None:
+        verify_witness_receipt(
+            plan, load_witness_receipt(witness_receipt_path),
+            witness_public_key_hex=witness_public_key_hex,
+        )
     if require_engine_source or record_engine_source:
         checked_paths = verify_engine_sources(
             Path(__file__).resolve().parents[2], spec["code_commit"],
@@ -111,6 +120,9 @@ def main(argv=None):
         "--record-engine-source", action="store_true",
         help="Require the source match and record the checked paths in a versioned report",
     )
+    parser.add_argument("--witness-receipt", type=Path, help="Require a signed A042 receipt")
+    parser.add_argument("--witness-public-key-hex",
+                        help="Expected Ed25519 key obtained independently of the receipt")
     args = parser.parse_args(argv)
     if (args.verify_report is None) != (args.expected_plan_sha256 is None):
         parser.error("--verify-report and --expected-plan-sha256 must be used together")
@@ -122,6 +134,8 @@ def main(argv=None):
             plan, args.csv, as_of_ms=time.time_ns() // 1_000_000,
             require_engine_source=args.require_engine_source,
             record_engine_source=args.record_engine_source,
+            witness_receipt_path=args.witness_receipt,
+            witness_public_key_hex=args.witness_public_key_hex,
         )
         encoded = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode(
             "ascii"

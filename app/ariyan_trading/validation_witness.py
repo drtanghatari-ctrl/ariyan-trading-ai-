@@ -64,6 +64,15 @@ def verify_witness_receipt(plan, receipt, *, witness_public_key_hex):
     }
 
 
+def load_witness_receipt(path):
+    """Read one bounded witness receipt without accepting duplicate fields."""
+    with Path(path).open("rb") as stream:
+        raw = stream.read(MAX_RECEIPT_BYTES + 1)
+    if len(raw) > MAX_RECEIPT_BYTES:
+        raise ValueError("Witness receipt exceeds 4 KiB")
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
@@ -73,11 +82,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         plan = load_plan(args.plan)
-        with args.receipt.open("rb") as stream:
-            raw = stream.read(MAX_RECEIPT_BYTES + 1)
-        if len(raw) > MAX_RECEIPT_BYTES:
-            raise ValueError("Witness receipt exceeds 4 KiB")
-        receipt = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+        receipt = load_witness_receipt(args.receipt)
         result = verify_witness_receipt(
             plan, receipt, witness_public_key_hex=args.witness_public_key_hex,
         )
