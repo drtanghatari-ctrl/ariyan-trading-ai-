@@ -1,6 +1,7 @@
 """Inspect a pending paper checkpoint under an authenticated FREEZE."""
 
 import argparse
+import hashlib
 import json
 import re
 import sqlite3
@@ -22,7 +23,8 @@ from .trust_anchor import read_anchor
 VERSION = "ARIYAN-A058-PAPER-PENDING-DIAGNOSTIC-V1"
 
 
-def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_state_sha256, key):
+def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_state_sha256, key,
+                                     include_clearance_binding=False):
     """Classify the authenticated anchor against a verified pending journal."""
     database, anchor, selector = map(_input_path, (database, anchor, selector))
     if database.samefile(anchor) or database.samefile(selector) or anchor.samefile(selector):
@@ -70,7 +72,7 @@ def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_sta
             else:
                 position = "OUTSIDE_EXPECTED_TIPS"
 
-    return {
+    report = {
         "version": VERSION,
         "paper_state": "FREEZE",
         "publication_pending": True,
@@ -83,6 +85,21 @@ def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_sta
         "write_authorized": False,
         "live_authorized": False,
     }
+    if include_clearance_binding:
+        binding = {
+            "version": "ARIYAN-A059-PAPER-CLEARANCE-BINDING-V1",
+            "ledger_identity": identity,
+            "active_state_sha256": pin,
+            "pending_attempt": marker[0],
+            "journal_sequence": tip_sequence,
+            "journal_digest": tip_digest,
+            "anchor_sequence": anchor_tip[0],
+            "anchor_digest": anchor_tip[1],
+            "anchor_position": position,
+        }
+        encoded = json.dumps(binding, sort_keys=True, separators=(",", ":")).encode("ascii")
+        report["clearance_binding_sha256"] = hashlib.sha256(encoded).hexdigest()
+    return report
 
 
 def main(argv=None):
@@ -92,6 +109,8 @@ def main(argv=None):
     parser.add_argument("--selector", required=True, type=Path)
     parser.add_argument("--expected-state-sha256", required=True)
     parser.add_argument("--checkpoint-key-file", required=True, type=Path)
+    parser.add_argument("--include-clearance-binding", action="store_true",
+                        help="Include the fingerprint for an A059 approval")
     args = parser.parse_args(argv)
     try:
         key_path = _input_path(args.checkpoint_key_file)
@@ -103,6 +122,7 @@ def main(argv=None):
         report = inspect_pending_paper_checkpoint(
             args.database, args.anchor, args.selector,
             expected_state_sha256=args.expected_state_sha256, key=key,
+            include_clearance_binding=args.include_clearance_binding,
         )
     except (OSError, ValueError, TypeError, ArithmeticError, sqlite3.Error):
         parser.exit(2, "Pending checkpoint inspection rejected; no repair performed.\n")

@@ -6,10 +6,15 @@ import unittest
 from contextlib import closing, redirect_stderr, redirect_stdout
 from pathlib import Path
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from ariyan_trading import checkpoint_coordinator, paper_pending_diagnostic as diagnostic
 from ariyan_trading.durable_ledger import DurableLedger
 from ariyan_trading.journal_store import verify_protected_journal
 from ariyan_trading.paper_active_selection import create_paper_active_selection
+from ariyan_trading.paper_pending_clearance import (
+    ACTION, VERSION, assess_pending_clearance, clearance_payload,
+)
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
 from ariyan_trading.trust_anchor import create_anchor, write_anchor
 
@@ -110,3 +115,60 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
         self.assertIn("no repair performed", stderr.getvalue())
         self.assertNotIn(str(self.key_file), stderr.getvalue())
+
+    def clearance_intent(self):
+        report = self.inspect(include_clearance_binding=True)
+        return {
+            "version": VERSION, "action": ACTION,
+            "clearance_binding_sha256": report["clearance_binding_sha256"],
+            "expires_at_ms": 100,
+        }
+
+    def assess_clearance(self, signer, intent, **overrides):
+        options = {
+            "signature": signer.sign(clearance_payload(intent)),
+            "expected_state_sha256": self.pin, "checkpoint_key": self.key,
+            "operator_public_key": signer.public_key().public_bytes_raw(), "as_of_ms": 99,
+        }
+        options.update(overrides)
+        return assess_pending_clearance(self.database, self.anchor, self.selector, intent, **options)
+
+    def test_clearance_matches_published_tip_and_preserves_the_pending_marker(self):
+        self.set_pending()
+        self.assertNotIn("clearance_binding_sha256", self.inspect())
+        signer = Ed25519PrivateKey.generate()
+        intent = self.clearance_intent()
+        inputs = (self.database, self.anchor, self.selector, self.state)
+        before = {path: path.read_bytes() for path in inputs}
+        result = self.assess_clearance(signer, intent)
+        self.assertEqual(result["status"], "SIGNED_APPROVAL_MATCHES_INSPECTED_PENDING_CHECKPOINT")
+        self.assertFalse(result["write_authorized"])
+        self.assertTrue(result["checkpoint_inspection"]["publication_pending"])
+        self.assertEqual(before, {path: path.read_bytes() for path in inputs})
+
+    def test_clearance_rejects_changed_marker_wrong_signer_and_expiry(self):
+        self.set_pending()
+        signer = Ed25519PrivateKey.generate()
+        intent = self.clearance_intent()
+        other = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+        with self.assertRaisesRegex(ValueError, "Invalid operator"):
+            self.assess_clearance(signer, intent, operator_public_key=other)
+        with self.assertRaisesRegex(ValueError, "expired"):
+            self.assess_clearance(signer, intent, as_of_ms=100)
+        with closing(DurableLedger(self.database, opening_cash="1000.00")) as ledger:
+            ledger.db.execute("UPDATE ledger_meta SET value=? WHERE key=?",
+                              ("b" * 32, checkpoint_coordinator.PENDING))
+        with self.assertRaisesRegex(ValueError, "freshly inspected"):
+            self.assess_clearance(signer, intent)
+
+    def test_signed_clearance_does_not_accept_previous_anchor_tip(self):
+        self.set_pending()
+        with closing(DurableLedger(self.database, opening_cash="1000.00")) as ledger:
+            genesis = ledger.db.execute(
+                "SELECT value FROM ledger_meta WHERE key='journal_genesis'"
+            ).fetchone()[0]
+        write_anchor(self.anchor, create_anchor(0, genesis, self.key), self.key)
+        self.assertEqual(self.inspect()["anchor_position"], "AT_PREVIOUS_VERIFIED_TIP")
+        intent = self.clearance_intent()
+        with self.assertRaisesRegex(ValueError, "current journal tip"):
+            self.assess_clearance(Ed25519PrivateKey.generate(), intent)
