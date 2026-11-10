@@ -35,12 +35,18 @@ def _authenticated_record(ledger_identity, execution_state, key):
 
 def create_paper_execution_state(path, ledger_identity, execution_state, *, key):
     """Create a state file exclusively and synchronize its contents."""
+    create_pinned_paper_execution_state(path, ledger_identity, execution_state, key=key)
+
+
+def create_pinned_paper_execution_state(path, ledger_identity, execution_state, *, key):
+    """Create the file exclusively and return the hash of the bytes written."""
     data = _encode(_authenticated_record(ledger_identity, execution_state, key))
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
     with os.fdopen(fd, "wb") as stream:
         stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
+    return hashlib.sha256(data).hexdigest()
 
 
 def read_paper_execution_state(path, ledger_identity, *, key, expected_sha256=None):
