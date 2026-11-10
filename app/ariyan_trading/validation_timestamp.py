@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from .validation_plan import load_plan
+from .validation_plan import load_plan, verify_plan
 
 VERSION = "ARIYAN-A045-PLAN-TIMESTAMP-V1"
 MAX_INPUT_BYTES = 256 * 1024
@@ -26,10 +26,13 @@ def _read_input(path):
 
 
 def _openssl(*args):
-    result = subprocess.run(
-        ["openssl", "ts", *args], capture_output=True, timeout=15,
-        env={**os.environ, "LC_ALL": "C"},
-    )
+    try:
+        result = subprocess.run(
+            ["openssl", "ts", *args], capture_output=True, timeout=15,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("OpenSSL timestamp command timed out") from exc
     if result.returncode:
         raise ValueError(f"OpenSSL timestamp {args[0].removeprefix('-')} failed")
     return result.stdout.decode("ascii", errors="replace")
@@ -58,8 +61,17 @@ def _signed_time_ms(reply_text):
 
 def verify_plan_timestamp(plan_path, receipt_path, ca_path, *, expected_ca_sha256,
                           tsa_cert_path=None):
-    """Check the signed digest and UTC time using the separately pinned CA file."""
-    plan = load_plan(plan_path)
+    """Load a frozen plan and verify its timestamp response."""
+    return verify_timestamp(
+        load_plan(plan_path), receipt_path, ca_path,
+        expected_ca_sha256=expected_ca_sha256, tsa_cert_path=tsa_cert_path,
+    )
+
+
+def verify_timestamp(plan, receipt_path, ca_path, *, expected_ca_sha256,
+                     tsa_cert_path=None):
+    """Check the signed digest and UTC time for the supplied plan snapshot."""
+    plan = verify_plan(plan)
     ca = _read_input(ca_path)
     ca_digest = hashlib.sha256(ca).hexdigest()
     if ca_digest != expected_ca_sha256:
@@ -104,7 +116,7 @@ def main(argv=None):
             args.plan, args.receipt, args.ca_file,
             expected_ca_sha256=args.expected_ca_sha256, tsa_cert_path=args.tsa_cert,
         )
-    except (OSError, ValueError, ArithmeticError, RecursionError, subprocess.TimeoutExpired) as exc:
+    except (OSError, ValueError, ArithmeticError, RecursionError) as exc:
         parser.exit(2, f"Plan timestamp rejected: {exc}\n")
     print(json.dumps(result, sort_keys=True))
     return 0

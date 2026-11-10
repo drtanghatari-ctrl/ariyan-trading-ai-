@@ -13,11 +13,13 @@ from .market_data import integer, load_candles
 from .replay import ReplayConfig
 from .validation_engine import verify_engine_sources
 from .validation_plan import load_plan, verify_plan
+from .validation_timestamp import verify_timestamp
 from .validation_witness import load_witness_receipt, verify_witness_receipt
 
 VERSION = "ARIYAN-A037-VALIDATION-EVALUATION-V1"
 SOURCE_RECORD_VERSION = "ARIYAN-A041-VALIDATION-EVALUATION-V1"
 WITNESS_RECORD_VERSION = "ARIYAN-A044-VALIDATION-EVALUATION-V1"
+TIMESTAMP_RECORD_VERSION = "ARIYAN-A046-VALIDATION-EVALUATION-V1"
 
 
 def _check_scenario(evaluation, scenario, criteria):
@@ -138,13 +140,34 @@ def main(argv=None):
         "--record-witness-receipt", action="store_true",
         help="Record the verified receipt and key fingerprints in a versioned report",
     )
+    parser.add_argument("--timestamp-receipt", type=Path, help="Require an RFC 3161 response")
+    parser.add_argument("--timestamp-ca-file", type=Path, help="Trusted timestamp CA file")
+    parser.add_argument("--expected-timestamp-ca-sha256", help="Independently obtained CA file hash")
+    parser.add_argument("--timestamp-tsa-cert", type=Path, help="Optional untrusted TSA certificate")
     args = parser.parse_args(argv)
     if (args.verify_report is None) != (args.expected_plan_sha256 is None):
         parser.error("--verify-report and --expected-plan-sha256 must be used together")
+    timestamp_options = (
+        args.timestamp_receipt, args.timestamp_ca_file, args.expected_timestamp_ca_sha256,
+    )
+    use_timestamp = all(value is not None for value in timestamp_options)
+    if not use_timestamp and (
+        any(value is not None for value in timestamp_options) or args.timestamp_tsa_cert is not None
+    ):
+        parser.error(
+            "--timestamp-receipt, --timestamp-ca-file and "
+            "--expected-timestamp-ca-sha256 must be used together"
+        )
     try:
         plan = load_plan(args.plan)
         if args.verify_report is not None and plan["plan_sha256"] != args.expected_plan_sha256:
             raise ValueError("Plan does not match the separately recorded fingerprint")
+        if use_timestamp:
+            timestamp_check = verify_timestamp(
+                plan, args.timestamp_receipt, args.timestamp_ca_file,
+                expected_ca_sha256=args.expected_timestamp_ca_sha256,
+                tsa_cert_path=args.timestamp_tsa_cert,
+            )
         report = evaluate_plan(
             plan, args.csv, as_of_ms=time.time_ns() // 1_000_000,
             require_engine_source=args.require_engine_source,
@@ -153,6 +176,9 @@ def main(argv=None):
             witness_public_key_hex=args.witness_public_key_hex,
             record_witness_receipt=args.record_witness_receipt,
         )
+        if use_timestamp:
+            report["version"] = TIMESTAMP_RECORD_VERSION
+            report["plan_timestamp_check"] = timestamp_check
         encoded = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode(
             "ascii"
         )
