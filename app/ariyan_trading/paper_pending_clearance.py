@@ -1,9 +1,18 @@
-"""Assess a signed approval for a published paper checkpoint's pending marker."""
+"""Assess or apply signed pending-marker clearance for a published paper checkpoint."""
 
 import json
 import re
+import sqlite3
+import time
+from contextlib import closing
+from decimal import Context, localcontext
 
-from .paper_pending_diagnostic import inspect_pending_paper_checkpoint
+from .checkpoint_coordinator import PENDING
+from .checkpoint_verifier import verify_checkpoint
+from .initialization_lock import initialization_lock
+from .paper_pending_diagnostic import (
+    _inspect_pending_snapshot, _validated_inputs, inspect_pending_paper_checkpoint,
+)
 
 VERSION = "ARIYAN-A059-PAPER-PENDING-CLEARANCE-V1"
 ACTION = "CLEAR_PUBLISHED_PENDING_MARKER"
@@ -24,11 +33,11 @@ def clearance_payload(intent):
     return DOMAIN + json.dumps(intent, sort_keys=True, separators=(",", ":")).encode("ascii")
 
 
-def assess_pending_clearance(
-    database, anchor, selector, intent, signature, *, expected_state_sha256,
-    checkpoint_key, operator_public_key, as_of_ms,
-):
-    """Reinspect and match a signed approval without granting write authority."""
+class PendingClearanceUncertain(RuntimeError):
+    """The marker-clearance commit outcome requires inspection."""
+
+
+def _verify_signed_intent(intent, signature, operator_public_key, as_of_ms):
     if type(intent) is not dict:
         raise ValueError("Unsupported pending clearance intent")
     intent = intent.copy()
@@ -47,19 +56,78 @@ def assess_pending_clearance(
         Ed25519PublicKey.from_public_bytes(operator_public_key).verify(signature, payload)
     except InvalidSignature as exc:
         raise ValueError("Invalid operator clearance signature") from exc
+    return intent
 
-    report = inspect_pending_paper_checkpoint(
-        database, anchor, selector, expected_state_sha256=expected_state_sha256,
-        key=checkpoint_key, include_clearance_binding=True,
-    )
+
+def _require_matching_clearance(report, intent):
     if report["anchor_position"] != "AT_VERIFIED_JOURNAL_TIP":
         raise ValueError("Clearance assessment requires an anchor at the current journal tip")
     if report["clearance_binding_sha256"] != intent["clearance_binding_sha256"]:
         raise ValueError("Clearance intent differs from the freshly inspected checkpoint")
+
+
+def assess_pending_clearance(
+    database, anchor, selector, intent, signature, *, expected_state_sha256,
+    checkpoint_key, operator_public_key, as_of_ms,
+):
+    """Reinspect and match a signed approval without granting write authority."""
+    intent = _verify_signed_intent(intent, signature, operator_public_key, as_of_ms)
+    report = inspect_pending_paper_checkpoint(
+        database, anchor, selector, expected_state_sha256=expected_state_sha256,
+        key=checkpoint_key, include_clearance_binding=True,
+    )
+    _require_matching_clearance(report, intent)
     return {
         "version": VERSION,
         "action": ACTION,
         "status": "SIGNED_APPROVAL_MATCHES_INSPECTED_PENDING_CHECKPOINT",
         "checkpoint_inspection": report,
         "write_authorized": False,
+    }
+
+
+def clear_published_pending_marker(
+    database, anchor, selector, intent, signature, *, expected_state_sha256,
+    checkpoint_key, operator_public_key,
+):
+    """Clear one signed, already-published pending marker under paper FREEZE."""
+    database, anchor, selector = _validated_inputs(database, anchor, selector, checkpoint_key)
+    with initialization_lock(selector), localcontext(Context(prec=50)):
+        with closing(sqlite3.connect(
+            database.as_uri() + "?mode=rw", uri=True, isolation_level=None, timeout=10,
+        )) as db:
+            if db.execute("PRAGMA synchronous").fetchone()[0] not in (2, 3):
+                raise ValueError("SQLite FULL or EXTRA synchronous mode required")
+            db.execute("BEGIN IMMEDIATE")
+            report, marker, opening_cash = _inspect_pending_snapshot(
+                db, anchor, selector, expected_state_sha256=expected_state_sha256,
+                key=checkpoint_key, include_clearance_binding=True,
+            )
+            signed = _verify_signed_intent(
+                intent, signature, operator_public_key, time.time_ns() // 1_000_000,
+            )
+            _require_matching_clearance(report, signed)
+
+            deleted = db.execute(
+                "DELETE FROM ledger_meta WHERE key=? AND value=?", (PENDING, marker),
+            )
+            if deleted.rowcount != 1 or db.total_changes != 1:
+                raise ValueError("Pending clearance must change only the inspected marker")
+            tip = verify_checkpoint(db, opening_cash, anchor, checkpoint_key)
+            if tip != (report["journal_sequence"], report["journal_digest"]):
+                raise ValueError("Checkpoint changed during pending clearance")
+            try:
+                db.execute("COMMIT")
+            except BaseException as exc:
+                raise PendingClearanceUncertain(
+                    "Clearance commit outcome requires inspection; do not retry automatically"
+                ) from exc
+    return {
+        "version": "ARIYAN-A060-PAPER-PENDING-CLEARANCE-RESULT-V1",
+        "status": "PUBLISHED_PENDING_MARKER_CLEARED",
+        "journal_sequence": tip[0],
+        "journal_digest": tip[1],
+        "clearance_binding_sha256": signed["clearance_binding_sha256"],
+        "paper_state": "FREEZE",
+        "live_authorized": False,
     }

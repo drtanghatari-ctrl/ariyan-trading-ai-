@@ -23,54 +23,69 @@ from .trust_anchor import read_anchor
 VERSION = "ARIYAN-A058-PAPER-PENDING-DIAGNOSTIC-V1"
 
 
-def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_state_sha256, key,
-                                     include_clearance_binding=False):
-    """Classify the authenticated anchor against a verified pending journal."""
+def _validated_inputs(database, anchor, selector, key):
     database, anchor, selector = map(_input_path, (database, anchor, selector))
     if database.samefile(anchor) or database.samefile(selector) or anchor.samefile(selector):
         raise ValueError("Database, anchor and selector must be separate files")
     if type(key) is not bytes or not 32 <= len(key) <= 4096:
         raise ValueError("Checkpoint key must contain 32..4096 raw bytes")
+    return database, anchor, selector
 
+
+def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_state_sha256, key,
+                                     include_clearance_binding=False):
+    """Classify the authenticated anchor against a verified pending journal."""
+    database, anchor, selector = _validated_inputs(database, anchor, selector, key)
     with initialization_lock(selector), localcontext(Context(prec=50)):
         with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as db:
             db.execute("BEGIN")
-            validate_ledger_schema(db)
-            identity = read_ledger_identity(db)
-            state_path, pin = read_paper_active_selection(selector, identity, key=key)
-            if type(expected_state_sha256) is not str or pin != expected_state_sha256:
-                raise ValueError("Active selection differs from the independently retained pin")
-            if read_paper_execution_state(state_path, identity, key=key, expected_sha256=pin) != "FREEZE":
-                raise ValueError("Pending checkpoint inspection requires FREEZE")
+            report, _, _ = _inspect_pending_snapshot(
+                db, anchor, selector, expected_state_sha256=expected_state_sha256,
+                key=key, include_clearance_binding=include_clearance_binding,
+            )
+    return report
 
-            marker = db.execute("SELECT value FROM ledger_meta WHERE key=?", (PENDING,)).fetchone()
-            if marker is None or not re.fullmatch(r"[0-9a-f]{32}", marker[0]):
-                raise ValueError("Expected a coordinator pending publication marker")
-            opening = db.execute(
-                "SELECT value FROM ledger_meta WHERE key='opening_cash'"
-            ).fetchone()
-            if opening is None:
-                raise ValueError("Ledger is missing opening cash")
-            tip_digest = verify_protected_journal(db, exact_cash(opening[0]))
-            tip_sequence = db.execute("SELECT COUNT(*) FROM ledger_entries").fetchone()[0]
-            if tip_sequence == 0:
-                raise ValueError("Pending publication requires a committed entry")
 
-            anchor_tip = read_anchor(anchor, key)
-            if tip_sequence == 1:
-                prior_digest = db.execute(
-                    "SELECT value FROM ledger_meta WHERE key='journal_genesis'"
-                ).fetchone()[0]
-            else:
-                prior_digest = db.execute(
-                    "SELECT digest FROM journal_commitments WHERE sequence=?", (tip_sequence - 1,),
-                ).fetchone()[0]
-            if anchor_tip == (tip_sequence, tip_digest):
-                position = "AT_VERIFIED_JOURNAL_TIP"
-            elif anchor_tip == (tip_sequence - 1, prior_digest):
-                position = "AT_PREVIOUS_VERIFIED_TIP"
-            else:
-                position = "OUTSIDE_EXPECTED_TIPS"
+def _inspect_pending_snapshot(db, anchor, selector, *, expected_state_sha256, key,
+                              include_clearance_binding):
+    """Inspect inside the caller's transaction and selector lock."""
+    validate_ledger_schema(db)
+    identity = read_ledger_identity(db)
+    state_path, pin = read_paper_active_selection(selector, identity, key=key)
+    if type(expected_state_sha256) is not str or pin != expected_state_sha256:
+        raise ValueError("Active selection differs from the independently retained pin")
+    if read_paper_execution_state(state_path, identity, key=key, expected_sha256=pin) != "FREEZE":
+        raise ValueError("Pending checkpoint inspection requires FREEZE")
+
+    marker = db.execute("SELECT value FROM ledger_meta WHERE key=?", (PENDING,)).fetchone()
+    if marker is None or not re.fullmatch(r"[0-9a-f]{32}", marker[0]):
+        raise ValueError("Expected a coordinator pending publication marker")
+    opening = db.execute(
+        "SELECT value FROM ledger_meta WHERE key='opening_cash'"
+    ).fetchone()
+    if opening is None:
+        raise ValueError("Ledger is missing opening cash")
+    opening_cash = exact_cash(opening[0])
+    tip_digest = verify_protected_journal(db, opening_cash)
+    tip_sequence = db.execute("SELECT COUNT(*) FROM ledger_entries").fetchone()[0]
+    if tip_sequence == 0:
+        raise ValueError("Pending publication requires a committed entry")
+
+    anchor_tip = read_anchor(anchor, key)
+    if tip_sequence == 1:
+        prior_digest = db.execute(
+            "SELECT value FROM ledger_meta WHERE key='journal_genesis'"
+        ).fetchone()[0]
+    else:
+        prior_digest = db.execute(
+            "SELECT digest FROM journal_commitments WHERE sequence=?", (tip_sequence - 1,),
+        ).fetchone()[0]
+    if anchor_tip == (tip_sequence, tip_digest):
+        position = "AT_VERIFIED_JOURNAL_TIP"
+    elif anchor_tip == (tip_sequence - 1, prior_digest):
+        position = "AT_PREVIOUS_VERIFIED_TIP"
+    else:
+        position = "OUTSIDE_EXPECTED_TIPS"
 
     report = {
         "version": VERSION,
@@ -99,7 +114,7 @@ def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_sta
         }
         encoded = json.dumps(binding, sort_keys=True, separators=(",", ":")).encode("ascii")
         report["clearance_binding_sha256"] = hashlib.sha256(encoded).hexdigest()
-    return report
+    return report, marker[0], opening_cash
 
 
 def main(argv=None):
