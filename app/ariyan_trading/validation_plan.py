@@ -152,6 +152,11 @@ def _read(path):
     return json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
 
 
+def load_plan(path):
+    """Read and verify a frozen plan from a bounded JSON file."""
+    return verify_plan(_read(Path(path)))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -168,7 +173,7 @@ def main(argv=None):
             with args.output.open("xb") as stream:
                 stream.write(_canonical(plan) + b"\n")
         else:
-            plan = verify_plan(_read(args.plan))
+            plan = load_plan(args.plan)
     except (OSError, ValueError, ArithmeticError, RecursionError) as exc:
         parser.exit(2, f"Validation plan rejected: {exc}\n")
     print(plan["plan_sha256"])
