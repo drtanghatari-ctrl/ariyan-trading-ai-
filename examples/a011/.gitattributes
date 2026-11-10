@@ -1,0 +1,2 @@
+# Preserve the exact bytes covered by SOURCE.json.
+BTCUSDT-1h-2021-02-excerpt.csv -text

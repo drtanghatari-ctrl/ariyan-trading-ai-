@@ -25,7 +25,7 @@ class HistoryIndexTests(unittest.TestCase):
             row=[str(t*scale),'100','110','90','105','1',str((t+60000)*scale-1),'0','1','0','0','0']
             for key,value in (changes or {}).get(i,{}).items():row[key]=str(value)
             rows.append(','.join(row))
-        self.path.write_text('\n'.join(rows)+'\n')
+        self.path.write_bytes(('\n'.join(rows)+'\n').encode('ascii'))
     def inspect(self,**kwargs):return h.inspect_history(self.path,**{**self.options,**kwargs})
     def cli(self,output):
         return subprocess.run([sys.executable,'-m','ariyan_trading.historical_segments','--csv',str(self.path),
