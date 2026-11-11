@@ -1,12 +1,12 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-11
+Last updated: 2026-11-11 (after step 1)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
 - Active branch: `development/accelerated-build` (real application; `main` only holds a reference ZIP + README)
 - Reference archive on `main`: `ARIYAN_TRADING_AI_CONSOLIDATED_MASTER_2026-10-17.zip` (handoff/test reference only; says full project NOT finished, 14 blockers)
-- Push access from Claude: NOT yet available (install the Claude GitHub App on the repo / reconnect GitHub in claude.ai settings)
+- Push access from Claude: WORKING (Claude GitHub App installed 2026-11-11; push to development/accelerated-build confirmed)
 
 ## Goal (user direction)
 Trading AI that works across crypto, stocks, forex (plus gold/silver/oil per MULTI_ASSET_SCOPE.md).
@@ -24,15 +24,18 @@ instrument definitions (A012: crypto/equity/fund/metal/energy; SPOT/SHARE/FUND_S
 cash trade math (A016), replay batch/view/export/review (A021–A026), Predictability Gate (A027), governed paper entry (A028/A029).
 
 ## Known gaps vs goal
-1. No FOREX asset class and no CFD product type in A012.
+1. DONE (metadata only): forex + CFD terms in A033 (`margin_instruments.py`). Still missing: margin-aware accounting, replay and risk for these products.
 2. Strategy is a toy 3/5 SMA crossover (engine.py); no real strategy framework or backtester metrics.
 3. BUY is always denied by design (A027 has no positive admission path) — needs an explicit governance decision to allow validated entries.
 4. Replay is single-symbol, long-only, spot-style; no shorting, leverage, margin, multi-instrument portfolio risk.
 5. No broker adapter (MT5/Opofinance), no live/demo connectivity.
 6. Native Windows checkpoint durability not done; MT5 Python package needs Windows + terminal.
 
+## Progress log
+- Step 1 DONE: A033 forex/CFD instrument terms (lot, pip, margin rate, shorting, exact notional/margin/P&L in quote currency). 17 new tests. A012 untouched.
+
 ## Proposed next steps
-1. Add FOREX asset class + CFD product type + lot/pip/margin semantics (new instrument spec version).
+1. (done) Forex/CFD instrument terms.
 2. Strategy interface + backtest metrics (return, drawdown, Sharpe, costs/spread).
 3. Decide the BUY-admission policy (what evidence unlocks entries).
 4. Broker-agnostic execution interface + MT5 adapter (demo only) for Opofinance.
