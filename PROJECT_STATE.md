@@ -1,6 +1,6 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-11 (after A038)
+Last updated: 2026-11-11 (after A039)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
@@ -40,12 +40,15 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A038 DONE: walk-forward validation harness (`walkforward.py`): train-only selection, unseen test windows with warm-up, benchmark, in-sample vs OOS gap, parameter grids. 12 new tests.
 
+- A039 DONE: broker-neutral execution (`execution.py`): Broker interface, PaperBroker (margin, SL/TP gaps, stop-out, idempotent orders), GuardedBroker (risk limits, kill switch, fail-closed, LIVE refused), SignalExecutor. 27 new tests.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
 2b. (done) FX conversion + sessions in backtests.
 2c. (done) A038 walk-forward harness.
-2d. NEXT: A039 broker-neutral execution + paper broker; A040 demo-only MT5 adapter; multi-instrument portfolio risk; forward paper-trading run on real data.
+2d. (done) A039 execution + paper broker.
+2e. NEXT: A040 demo-only MT5 adapter (Opofinance-ready; needs Windows + MT5 terminal + demo credentials from the user); multi-instrument portfolio risk; forward paper-trading run on real data.
 3. Decide the BUY-admission policy (what evidence unlocks entries).
 4. Broker-agnostic execution interface + MT5 adapter (demo only) for Opofinance.
 
