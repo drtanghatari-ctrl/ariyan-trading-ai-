@@ -315,6 +315,40 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         self.assertIn("no repair performed", stderr.getvalue())
         self.assertNotIn(str(self.key_file), stderr.getvalue())
 
+    def test_recovery_status_cli_verifies_clean_tip_read_only(self):
+        files = (self.database, self.anchor, self.selector, self.state)
+        before = tuple(path.read_bytes() for path in files)
+        with redirect_stdout(io.StringIO()) as stdout:
+            self.assertEqual(diagnostic.main([
+                "--database", str(self.database), "--anchor", str(self.anchor),
+                "--selector", str(self.selector), "--expected-state-sha256", self.pin,
+                "--checkpoint-key-file", str(self.key_file), "--recovery-status",
+            ]), 0)
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(report["status"], "NO_PENDING_VERIFIED_TIP")
+        self.assertEqual(report["version"], diagnostic.RECOVERY_STATUS_VERSION)
+        self.assertEqual(report["journal_sequence"], 1)
+        for key in ("publication_pending", "repair_authorized", "write_authorized", "live_authorized"):
+            self.assertFalse(report[key])
+        self.assertEqual(before, tuple(path.read_bytes() for path in files))
+
+    def test_recovery_status_classifies_pending_tips_and_rejects_missing_marker_at_stale_tip(self):
+        self.set_unpublished()
+        self.assertEqual(self.inspect(recovery_status=True)["status"], "PENDING_AT_PREVIOUS_TIP")
+        report = self.inspect()
+        write_anchor(self.anchor, create_anchor(1, report["journal_digest"], self.key), self.key)
+        self.assertEqual(self.inspect(recovery_status=True)["status"], "PENDING_AT_PUBLISHED_TIP")
+        write_anchor(self.anchor, create_anchor(1, "0" * 64, self.key), self.key)
+        self.assertEqual(self.inspect(recovery_status=True)["status"], "PENDING_WITH_DIVERGENT_ANCHOR")
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE ledger_meta SET value='invalid' WHERE key=?", (checkpoint_coordinator.PENDING,))
+        with self.assertRaisesRegex(ValueError, "Expected a coordinator pending publication marker"):
+            self.inspect(recovery_status=True)
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("DELETE FROM ledger_meta WHERE key=?", (checkpoint_coordinator.PENDING,))
+        with self.assertRaisesRegex(ValueError, "differs from the journal tip"):
+            self.inspect(recovery_status=True)
+
     def clearance_intent(self):
         report = self.inspect(include_clearance_binding=True)
         return {
@@ -500,3 +534,4 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
                 self.apply_clearance(signer, intent)
         with self.assertRaisesRegex(ValueError, "pending publication marker"):
             self.inspect()
+        self.assertEqual(self.inspect(recovery_status=True)["status"], "NO_PENDING_VERIFIED_TIP")
