@@ -71,3 +71,55 @@ def bounded_decimal(value, maximum_digits=24, maximum_places=12):
         raise ValueError("Magnitude exceeds supported range")
 
     return amount
+
+
+def replay_ledger_balances(db, opening_cash):
+    """Validate journal economics against opening cash in the caller's snapshot."""
+    with localcontext() as ctx:
+        ctx.prec = 50
+        cash = opening_cash
+        units = Decimal("0")
+
+        rows = db.execute(
+            "SELECT sequence,action,quantity,price,"
+            "cash_delta,units_delta "
+            "FROM ledger_entries ORDER BY sequence"
+        )
+
+        expected_sequence = 1
+
+        for (
+            sequence, action, quantity, price,
+            cash_delta, units_delta,
+        ) in rows:
+            if sequence != expected_sequence:
+                raise ValueError("Journal sequence gap")
+
+            if action not in ("BUY", "SELL"):
+                raise ValueError("Unsupported journal action")
+
+            qty, _, cost = validated_trade(
+                quantity, price
+            )
+
+            if action == "BUY":
+                if Decimal(units_delta) != qty:
+                    raise ValueError("Invalid BUY units delta")
+                if Decimal(cash_delta) != -cost:
+                    raise ValueError("Invalid BUY cash delta")
+                if cost > cash:
+                    raise ValueError("Journal overspent cash")
+                cash -= cost
+                units += qty
+            else:
+                if Decimal(units_delta) != -qty:
+                    raise ValueError("Invalid SELL units delta")
+                if Decimal(cash_delta) != cost:
+                    raise ValueError("Invalid SELL cash delta")
+                if qty > units:
+                    raise ValueError("Journal oversold units")
+                cash += cost
+                units -= qty
+            expected_sequence += 1
+
+    return cash, units

@@ -14,10 +14,14 @@ DOMAIN = VERSION.encode("ascii") + b"\x00"
 
 def unpublished_order_review_payload(intent):
     """Encode the inspected evidence binding and the independently retained order."""
+    return _order_intent_payload(intent, version=VERSION, action=ACTION, domain=DOMAIN)
+
+
+def _order_intent_payload(intent, *, version, action, domain):
     if type(intent) is not dict or intent.keys() != {
         "version", "action", "unpublished_order_review_sha256", "expires_at_ms",
         "request_id", "side", "quantity", "price",
-    } or intent["version"] != VERSION or intent["action"] != ACTION:
+    } or intent["version"] != version or intent["action"] != action:
         raise ValueError("Unsupported unpublished order review intent")
     digest = intent["unpublished_order_review_sha256"]
     if type(digest) is not str or not re.fullmatch(r"[0-9a-f]{64}", digest):
@@ -33,7 +37,7 @@ def unpublished_order_review_payload(intent):
            for field in ("quantity", "price")):
         raise ValueError("Review quantity and price must be decimal strings")
     validated_trade(intent["quantity"], intent["price"])
-    return DOMAIN + json.dumps(intent, sort_keys=True, separators=(",", ":")).encode("ascii")
+    return domain + json.dumps(intent, sort_keys=True, separators=(",", ":")).encode("ascii")
 
 
 def assess_unpublished_order_review(
@@ -41,10 +45,29 @@ def assess_unpublished_order_review(
     checkpoint_key, operator_public_key, as_of_ms,
 ):
     """Reinspect the pending order under FREEZE and assess the signed review."""
+    intent = _verify_signed_order(
+        intent, signature, operator_public_key, as_of_ms, unpublished_order_review_payload,
+    )
+    report = inspect_pending_paper_checkpoint(
+        database, anchor, selector, expected_state_sha256=expected_state_sha256,
+        key=checkpoint_key, include_unpublished_order=True,
+    )
+    _require_matching_order(report, intent)
+    return {
+        "version": VERSION,
+        "action": ACTION,
+        "status": "SIGNED_REVIEW_MATCHES_UNPUBLISHED_PAPER_ORDER",
+        "checkpoint_inspection": report,
+        "write_authorized": False,
+        "live_authorized": False,
+    }
+
+
+def _verify_signed_order(intent, signature, operator_public_key, as_of_ms, payload_builder):
     if type(intent) is not dict:
         raise ValueError("Unsupported unpublished order review intent")
     intent = intent.copy()
-    payload = unpublished_order_review_payload(intent)
+    payload = payload_builder(intent)
     if type(as_of_ms) is not int or not 0 <= as_of_ms < intent["expires_at_ms"]:
         raise ValueError("Review intent is expired or the clock input is invalid")
     if type(operator_public_key) is not bytes or len(operator_public_key) != 32:
@@ -59,11 +82,10 @@ def assess_unpublished_order_review(
         Ed25519PublicKey.from_public_bytes(operator_public_key).verify(signature, payload)
     except InvalidSignature as exc:
         raise ValueError("Invalid operator review signature") from exc
+    return intent
 
-    report = inspect_pending_paper_checkpoint(
-        database, anchor, selector, expected_state_sha256=expected_state_sha256,
-        key=checkpoint_key, include_unpublished_order=True,
-    )
+
+def _require_matching_order(report, intent):
     if report["unpublished_order_review_sha256"] != intent["unpublished_order_review_sha256"]:
         raise ValueError("Review intent differs from the freshly inspected checkpoint")
     order = report["unpublished_order"]
@@ -78,11 +100,3 @@ def assess_unpublished_order_review(
     )
     if (decimal_value(order["cash_delta"]), decimal_value(order["units_delta"])) != expected_deltas:
         raise ValueError("Journal deltas differ from the signed order economics")
-    return {
-        "version": VERSION,
-        "action": ACTION,
-        "status": "SIGNED_REVIEW_MATCHES_UNPUBLISHED_PAPER_ORDER",
-        "checkpoint_inspection": report,
-        "write_authorized": False,
-        "live_authorized": False,
-    }

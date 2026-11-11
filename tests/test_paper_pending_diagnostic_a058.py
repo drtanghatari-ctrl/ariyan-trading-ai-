@@ -23,6 +23,7 @@ from ariyan_trading.paper_pending_clearance import (
 )
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
 from ariyan_trading import paper_unpublished_order_review as order_review
+from ariyan_trading import paper_unpublished_checkpoint_publication as recovery
 from ariyan_trading.trust_anchor import create_anchor, write_anchor
 
 
@@ -204,6 +205,84 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         intent = self.unpublished_review_intent()
         with self.assertRaisesRegex(ValueError, "deltas differ"):
             self.assess_unpublished_review(Ed25519PrivateKey.generate(), intent)
+
+    def publication_intent(self):
+        return {
+            **self.unpublished_review_intent(),
+            "version": recovery.VERSION, "action": recovery.ACTION,
+        }
+
+    def publish(self, signer, intent, *, signature=None):
+        if signature is None:
+            signature = signer.sign(recovery.unpublished_checkpoint_publication_payload(intent))
+        return recovery.publish_unpublished_paper_checkpoint(
+            self.database, self.anchor, self.selector, intent, signature,
+            expected_state_sha256=self.pin, checkpoint_key=self.key,
+            operator_public_key=signer.public_key().public_bytes_raw(),
+        )
+
+    def test_publication_rejects_review_signature_wrong_order_and_late_expiry(self):
+        self.set_unpublished()
+        review = self.unpublished_review_intent()
+        intent = self.publication_intent()
+        signer = Ed25519PrivateKey.generate()
+        files = (self.database, self.anchor, self.selector, self.state)
+        before = tuple(path.read_bytes() for path in files)
+        with patch.object(recovery.time, "time_ns", return_value=99_000_000):
+            signature = signer.sign(order_review.unpublished_order_review_payload(review))
+            with self.assertRaisesRegex(ValueError, "Unsupported unpublished order review intent"):
+                self.publish(signer, review, signature=signature)
+            with self.assertRaisesRegex(ValueError, "Invalid operator review signature"):
+                self.publish(signer, intent, signature=signature)
+            with self.assertRaisesRegex(ValueError, "Signed order differs"):
+                self.publish(signer, {**intent, "price": "11"})
+        with patch.object(recovery.time, "time_ns", side_effect=[99_000_000, 100_000_000]):
+            with self.assertRaisesRegex(ValueError, "expired before the anchor write"):
+                self.publish(signer, intent)
+        self.assertEqual(before, tuple(path.read_bytes() for path in files))
+
+    def test_publication_rejects_unaffordable_order_with_valid_deltas(self):
+        self.set_unpublished()
+        report = self.inspect()
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute(
+                "UPDATE ledger_entries SET price='1001.00',cash_delta='-1001.00' WHERE sequence=1"
+            )
+            row = db.execute(
+                "SELECT sequence,request_id,action,quantity,price,cash_delta,units_delta "
+                "FROM ledger_entries WHERE sequence=1"
+            ).fetchone()
+            db.execute("UPDATE journal_commitments SET digest=? WHERE sequence=1",
+                       (entry_commitment(report["anchor_digest"], *row),))
+        intent = {**self.publication_intent(), "price": "1001"}
+        anchor_before = self.anchor.read_bytes()
+        with patch.object(recovery.time, "time_ns", return_value=99_000_000):
+            with self.assertRaisesRegex(ValueError, "Journal overspent cash"):
+                self.publish(Ed25519PrivateKey.generate(), intent)
+        self.assertEqual(anchor_before, self.anchor.read_bytes())
+        self.assertTrue(self.inspect()["publication_pending"])
+
+    def test_publication_requires_inspection_if_anchor_write_result_is_lost(self):
+        self.set_unpublished()
+        intent = self.publication_intent()
+        signer = Ed25519PrivateKey.generate()
+
+        def lose_result(*args):
+            write_anchor(*args)
+            raise OSError("simulated lost publication result")
+
+        files = (self.database, self.selector, self.state)
+        before = tuple(path.read_bytes() for path in files)
+        with patch.object(recovery.time, "time_ns", return_value=99_000_000):
+            with patch.object(recovery, "write_anchor", side_effect=lose_result):
+                with self.assertRaisesRegex(recovery.PaperCheckpointPublicationUncertain, "inspection"):
+                    self.publish(signer, intent)
+            with self.assertRaisesRegex(ValueError, "previous verified anchor"):
+                self.publish(signer, intent)
+        report = self.inspect()
+        self.assertEqual(report["anchor_position"], "AT_VERIFIED_JOURNAL_TIP")
+        self.assertTrue(report["publication_pending"])
+        self.assertEqual(before, tuple(path.read_bytes() for path in files))
 
     def test_requires_pending_marker_matching_pin_and_freeze(self):
         with self.assertRaisesRegex(ValueError, "pending publication marker"):

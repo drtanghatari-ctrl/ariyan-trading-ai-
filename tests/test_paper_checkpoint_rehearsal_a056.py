@@ -32,6 +32,7 @@ from ariyan_trading.paper_pending_diagnostic import inspect_pending_paper_checkp
 from ariyan_trading.paper_execution_controller import PaperExecutionController
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
 from ariyan_trading import paper_unpublished_order_review as order_review
+from ariyan_trading import paper_unpublished_checkpoint_publication as recovery
 from ariyan_trading.paper_state_escalation import VERSION, escalation_payload
 from ariyan_trading.trust_anchor import create_anchor, read_anchor, write_anchor
 from test_paper_process_lock_a055 import _wait_for_file
@@ -185,7 +186,28 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                 self.assertEqual(statements, [])
                 self.assertEqual((tuple(ledger.db.iterdump()), anchor.read_bytes()), before)
 
-            if interruption == "after":
+            if interruption == "before":
+                publication_intent = {
+                    **review_intent, "version": recovery.VERSION, "action": recovery.ACTION,
+                    "expires_at_ms": time.time_ns() // 1_000_000 + 60_000,
+                }
+                database_before = database.read_bytes()
+                published = recovery.publish_unpublished_paper_checkpoint(
+                    database, anchor, selector, publication_intent,
+                    signer.sign(recovery.unpublished_checkpoint_publication_payload(publication_intent)),
+                    expected_state_sha256=freeze_pin, checkpoint_key=key,
+                    operator_public_key=configuration["operator_public_key"],
+                )
+                self.assertEqual(published["status"], "PAPER_CHECKPOINT_PUBLISHED_PENDING_CLEARANCE")
+                self.assertEqual(database.read_bytes(), database_before)
+                report = inspect_pending_paper_checkpoint(
+                    database, anchor, selector, expected_state_sha256=freeze_pin, key=key,
+                    include_clearance_binding=True,
+                )
+                self.assertEqual(report["anchor_position"], "AT_VERIFIED_JOURNAL_TIP")
+                self.assertTrue(report["publication_pending"])
+
+            if interruption:
                 clearance = {
                     "version": CLEARANCE_VERSION, "action": CLEARANCE_ACTION,
                     "clearance_binding_sha256": report["clearance_binding_sha256"],

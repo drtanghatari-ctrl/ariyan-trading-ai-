@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from .checkpoint_verifier import verify_checkpoint
-from .ledger_validation import exact_cash
+from .ledger_validation import exact_cash, replay_ledger_balances
 from .ledger_identity import (
     initialize_ledger_identity,
     read_ledger_identity,
@@ -268,61 +268,7 @@ class DurableLedger:
                     raise ValueError("Checkpoint sequence mismatch")
                 if digest != expected_digest:
                     raise ValueError("Checkpoint digest mismatch")
-        from decimal import Decimal, localcontext
-
-        from .ledger_validation import (
-            exact_cash,
-            validated_trade,
-        )
-
-        with localcontext() as ctx:
-            ctx.prec = 50
-            cash = self.opening_cash
-            units = Decimal("0")
-
-            rows = self.db.execute(
-                "SELECT sequence,action,quantity,price,"
-                "cash_delta,units_delta "
-                "FROM ledger_entries ORDER BY sequence"
-            )
-
-            expected_sequence = 1
-
-            for (
-                sequence, action, quantity, price,
-                cash_delta, units_delta,
-            ) in rows:
-                if sequence != expected_sequence:
-                    raise ValueError("Journal sequence gap")
-
-                if action not in ("BUY", "SELL"):
-                    raise ValueError("Unsupported journal action")
-
-                qty, _, cost = validated_trade(
-                    quantity, price
-                )
-
-                if action == "BUY":
-                    if Decimal(units_delta) != qty:
-                        raise ValueError("Invalid BUY units delta")
-                    if Decimal(cash_delta) != -cost:
-                        raise ValueError("Invalid BUY cash delta")
-                    if cost > cash:
-                        raise ValueError("Journal overspent cash")
-                    cash -= cost
-                    units += qty
-                else:
-                    if Decimal(units_delta) != -qty:
-                        raise ValueError("Invalid SELL units delta")
-                    if Decimal(cash_delta) != cost:
-                        raise ValueError("Invalid SELL cash delta")
-                    if qty > units:
-                        raise ValueError("Journal oversold units")
-                    cash += cost
-                    units -= qty
-                expected_sequence += 1
-
-        return cash, units
+        return replay_ledger_balances(self.db, self.opening_cash)
 
     def _require_direct_writer_permission(self):
         """Reject direct trades on checkpoint-managed ledgers."""
