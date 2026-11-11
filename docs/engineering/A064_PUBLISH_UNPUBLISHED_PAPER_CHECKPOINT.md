@@ -19,5 +19,6 @@ reinspect the published tip and obtain a fresh A060 clearance signature.
 
 If publication raises `PaperCheckpointPublicationUncertain`, inspect the
 anchor and marker before deciding how to recover. If the anchor is visibly
-advanced but the native write failed, establish its durability before
-clearing the marker. The API has no automatic retries or order resubmission.
+advanced, the A065 clearance path syncs the authenticated anchor and its
+directory before deleting the marker. The API has no automatic retries or
+order resubmission.

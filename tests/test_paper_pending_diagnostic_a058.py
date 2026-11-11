@@ -2,6 +2,7 @@ import io
 import json
 import os
 import sqlite3
+import stat
 import tempfile
 import unittest
 from contextlib import closing, redirect_stderr, redirect_stdout
@@ -24,6 +25,7 @@ from ariyan_trading.paper_pending_clearance import (
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
 from ariyan_trading import paper_unpublished_order_review as order_review
 from ariyan_trading import paper_unpublished_checkpoint_publication as recovery
+from ariyan_trading import trust_anchor
 from ariyan_trading.trust_anchor import create_anchor, write_anchor
 
 
@@ -370,8 +372,9 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "current journal tip"):
             self.assess_clearance(Ed25519PrivateKey.generate(), intent)
 
-    def apply_clearance(self, signer, intent):
-        with patch("ariyan_trading.paper_pending_clearance.time.time_ns", return_value=99_000_000):
+    def apply_clearance(self, signer, intent, *, clock_values=None):
+        with patch("ariyan_trading.paper_pending_clearance.time.time_ns",
+                   return_value=99_000_000, side_effect=clock_values):
             return clear_published_pending_marker(
                 self.database, self.anchor, self.selector, intent,
                 signer.sign(clearance_payload(intent)), expected_state_sha256=self.pin,
@@ -422,6 +425,59 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
             self.assertIsNone(db.execute(
                 "SELECT value FROM ledger_meta WHERE key='unexpected'"
             ).fetchone())
+
+    def test_clearance_preserves_marker_on_file_or_directory_sync_failure(self):
+        self.set_pending()
+        signer = Ed25519PrivateKey.generate()
+        intent = self.clearance_intent()
+        files = (self.database, self.anchor, self.selector, self.state)
+        before = tuple(path.read_bytes() for path in files)
+        real_fsync = os.fsync
+        for failure in ("file", "directory"):
+            with self.subTest(failure=failure):
+                attempted = []
+
+                def sync(fd):
+                    kind = "directory" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file"
+                    attempted.append(kind)
+                    if kind == failure:
+                        raise OSError("simulated anchor sync failure")
+                    real_fsync(fd)
+
+                with patch.object(trust_anchor.os, "fsync", side_effect=sync):
+                    with self.assertRaisesRegex(OSError, "simulated anchor sync failure"):
+                        self.apply_clearance(signer, intent)
+                self.assertEqual(attempted, ["file"] if failure == "file" else ["file", "directory"])
+                self.assertEqual(before, tuple(path.read_bytes() for path in files))
+                self.assertTrue(self.inspect()["publication_pending"])
+        self.assertEqual(
+            self.apply_clearance(signer, intent)["status"], "PUBLISHED_PENDING_MARKER_CLEARED",
+        )
+
+    def test_clearance_rejects_anchor_replacement_during_sync(self):
+        self.set_pending()
+        signer = Ed25519PrivateKey.generate()
+        intent = self.clearance_intent()
+        replacement = self.anchor.with_name("replacement.json")
+        replacement.write_bytes(self.anchor.read_bytes())
+        real_sync_directory = trust_anchor._sync_directory
+
+        def replace_before_sync(path):
+            replacement.replace(self.anchor)
+            real_sync_directory(path)
+
+        with patch.object(trust_anchor, "_sync_directory", side_effect=replace_before_sync):
+            with self.assertRaisesRegex(ValueError, "Anchor path changed during sync"):
+                self.apply_clearance(signer, intent)
+        self.assertTrue(self.inspect()["publication_pending"])
+
+    def test_clearance_rejects_intent_that_expires_during_sync(self):
+        self.set_pending()
+        signer = Ed25519PrivateKey.generate()
+        intent = self.clearance_intent()
+        with self.assertRaisesRegex(ValueError, "expired during anchor sync"):
+            self.apply_clearance(signer, intent, clock_values=[99_000_000, 100_000_000])
+        self.assertTrue(self.inspect()["publication_pending"])
 
     def test_applied_clearance_reports_uncertainty_if_commit_result_is_lost(self):
         self.set_pending()

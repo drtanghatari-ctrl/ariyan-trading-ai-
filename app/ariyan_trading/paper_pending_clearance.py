@@ -13,6 +13,7 @@ from .initialization_lock import initialization_lock
 from .paper_pending_diagnostic import (
     _inspect_pending_snapshot, _validated_inputs, inspect_pending_paper_checkpoint,
 )
+from .trust_anchor import sync_verified_anchor
 
 VERSION = "ARIYAN-A059-PAPER-PENDING-CLEARANCE-V1"
 ACTION = "CLEAR_PUBLISHED_PENDING_MARKER"
@@ -107,6 +108,10 @@ def clear_published_pending_marker(
                 intent, signature, operator_public_key, time.time_ns() // 1_000_000,
             )
             _require_matching_clearance(report, signed)
+            expected_tip = (report["journal_sequence"], report["journal_digest"])
+            sync_verified_anchor(anchor, checkpoint_key, expected_tip)
+            if time.time_ns() // 1_000_000 >= signed["expires_at_ms"]:
+                raise ValueError("Clearance intent expired during anchor sync")
 
             deleted = db.execute(
                 "DELETE FROM ledger_meta WHERE key=? AND value=?", (PENDING, marker),
@@ -114,7 +119,7 @@ def clear_published_pending_marker(
             if deleted.rowcount != 1 or db.total_changes != 1:
                 raise ValueError("Pending clearance must change only the inspected marker")
             tip = verify_checkpoint(db, opening_cash, anchor, checkpoint_key)
-            if tip != (report["journal_sequence"], report["journal_digest"]):
+            if tip != expected_tip:
                 raise ValueError("Checkpoint changed during pending clearance")
             try:
                 db.execute("COMMIT")

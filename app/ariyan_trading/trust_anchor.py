@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 
@@ -102,14 +103,7 @@ def write_anchor(path, anchor, key):
             os.fsync(stream.fileno())
         os.replace(temporary, path)
 
-        flags = os.O_RDONLY
-        if hasattr(os, "O_DIRECTORY"):
-            flags |= os.O_DIRECTORY
-        directory_fd = os.open(str(path.parent), flags)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        _sync_directory(path.parent)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -117,7 +111,11 @@ def write_anchor(path, anchor, key):
 
 def read_anchor(path, key):
     with open(path, "rb") as stream:
-        data = stream.read(4097)
+        return _read_anchor_stream(stream, key)
+
+
+def _read_anchor_stream(stream, key):
+    data = stream.read(4097)
     if len(data) > 4096:
         raise ValueError("Anchor exceeds maximum size")
     try:
@@ -125,3 +123,29 @@ def read_anchor(path, key):
     except (ValueError, UnicodeDecodeError) as exc:
         raise ValueError("Invalid anchor encoding") from exc
     return verify_anchor(anchor, key)
+
+
+def _sync_directory(path):
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    directory_fd = os.open(path, flags)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def sync_verified_anchor(path, key, expected_tip):
+    """Authenticate and sync the existing anchor and its directory entry."""
+    path = Path(path)
+    directory = path.parent.stat()
+    with path.open("rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or _read_anchor_stream(stream, key) != expected_tip:
+            raise ValueError("Anchor differs from the expected checkpoint before sync")
+        os.fsync(stream.fileno())
+        _sync_directory(path.parent)
+        if (
+            not os.path.samestat(opened, path.lstat())
+            or not os.path.samestat(directory, path.parent.stat())
+        ):
+            raise ValueError("Anchor path changed during sync")
