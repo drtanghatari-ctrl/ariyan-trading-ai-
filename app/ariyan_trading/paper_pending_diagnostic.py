@@ -33,7 +33,7 @@ def _validated_inputs(database, anchor, selector, key):
 
 
 def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_state_sha256, key,
-                                     include_clearance_binding=False):
+                                     include_clearance_binding=False, include_unpublished_order=False):
     """Classify the authenticated anchor against a verified pending journal."""
     database, anchor, selector = _validated_inputs(database, anchor, selector, key)
     with initialization_lock(selector), localcontext(Context(prec=50)):
@@ -43,6 +43,18 @@ def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_sta
                 db, anchor, selector, expected_state_sha256=expected_state_sha256,
                 key=key, include_clearance_binding=include_clearance_binding,
             )
+            if include_unpublished_order:
+                if report["anchor_position"] != "AT_PREVIOUS_VERIFIED_TIP":
+                    raise ValueError("Unpublished order review requires the previous verified anchor")
+                fields = ("request_id", "action", "quantity", "price", "cash_delta", "units_delta")
+                row = db.execute(
+                    "SELECT request_id,action,quantity,price,cash_delta,units_delta "
+                    "FROM ledger_entries WHERE sequence=?", (report["journal_sequence"],),
+                ).fetchone()
+                report["unpublished_order"] = {
+                    **dict(zip(fields, row, strict=True)),
+                    "authenticated_by_anchor": False,
+                }
     return report
 
 
@@ -126,6 +138,8 @@ def main(argv=None):
     parser.add_argument("--checkpoint-key-file", required=True, type=Path)
     parser.add_argument("--include-clearance-binding", action="store_true",
                         help="Include the fingerprint for an A059 approval")
+    parser.add_argument("--include-unpublished-order", action="store_true",
+                        help="Show the pending order when the anchor is one verified entry behind")
     args = parser.parse_args(argv)
     try:
         key_path = _input_path(args.checkpoint_key_file)
@@ -138,6 +152,7 @@ def main(argv=None):
             args.database, args.anchor, args.selector,
             expected_state_sha256=args.expected_state_sha256, key=key,
             include_clearance_binding=args.include_clearance_binding,
+            include_unpublished_order=args.include_unpublished_order,
         )
     except (OSError, ValueError, TypeError, ArithmeticError, sqlite3.Error):
         parser.exit(2, "Pending checkpoint inspection rejected; no repair performed.\n")

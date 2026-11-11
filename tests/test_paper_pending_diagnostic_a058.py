@@ -83,6 +83,9 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         self.assertEqual(report["anchor_position"], "AT_VERIFIED_JOURNAL_TIP")
         self.assertTrue(report["publication_pending"])
         self.assertFalse(report["write_authorized"])
+        self.assertNotIn("unpublished_order", report)
+        with self.assertRaisesRegex(ValueError, "previous verified anchor"):
+            self.inspect(include_unpublished_order=True)
         self.assertEqual(before, {path: path.read_bytes() for path in inputs})
 
     def test_valid_hmac_for_divergent_anchor_is_reported_as_outside_expected_tips(self):
@@ -91,6 +94,32 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         report = self.inspect()
         self.assertEqual(report["anchor_position"], "OUTSIDE_EXPECTED_TIPS")
         self.assertFalse(report["repair_authorized"])
+        with self.assertRaisesRegex(ValueError, "previous verified anchor"):
+            self.inspect(include_unpublished_order=True)
+
+    def test_cli_reviews_unpublished_order_without_changes(self):
+        self.set_pending()
+        with closing(sqlite3.connect(self.database)) as db:
+            genesis = db.execute(
+                "SELECT value FROM ledger_meta WHERE key='journal_genesis'"
+            ).fetchone()[0]
+        write_anchor(self.anchor, create_anchor(0, genesis, self.key), self.key)
+        inputs = (self.database, self.anchor, self.selector, self.state, self.key_file)
+        before = tuple(path.read_bytes() for path in inputs)
+        with redirect_stdout(io.StringIO()) as stdout:
+            self.assertEqual(diagnostic.main([
+                "--database", str(self.database), "--anchor", str(self.anchor),
+                "--selector", str(self.selector), "--expected-state-sha256", self.pin,
+                "--checkpoint-key-file", str(self.key_file), "--include-unpublished-order",
+            ]), 0)
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(report["anchor_position"], "AT_PREVIOUS_VERIFIED_TIP")
+        self.assertEqual(report["unpublished_order"], {
+            "request_id": "seed", "action": "BUY", "quantity": "1.00000000", "price": "10.00",
+            "cash_delta": "-10.00", "units_delta": "1.00000000", "authenticated_by_anchor": False,
+        })
+        self.assertFalse(report["write_authorized"])
+        self.assertEqual(before, tuple(path.read_bytes() for path in inputs))
 
     def test_requires_pending_marker_matching_pin_and_freeze(self):
         with self.assertRaisesRegex(ValueError, "pending publication marker"):

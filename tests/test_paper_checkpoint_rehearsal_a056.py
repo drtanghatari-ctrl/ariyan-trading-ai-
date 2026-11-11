@@ -121,6 +121,7 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                 report = inspect_pending_paper_checkpoint(
                     database, anchor, selector, expected_state_sha256=freeze_pin, key=key,
                     include_clearance_binding=published,
+                    include_unpublished_order=not published,
                 )
                 self.assertEqual(
                     report["anchor_position"],
@@ -131,6 +132,12 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                     (2, 2) if published else (1, 2),
                 )
                 self.assertFalse(report["repair_authorized"])
+                if not published:
+                    self.assertEqual(report["unpublished_order"], {
+                        "request_id": "in-progress", "action": "SELL", "quantity": "1.00000000",
+                        "price": "11.00", "cash_delta": "11.00", "units_delta": "-1.00000000",
+                        "authenticated_by_anchor": False,
+                    })
                 with self.assertRaisesRegex(ValueError, "pending or uncertain"), closing(DurableLedger(
                     database, checkpoint_path=anchor, checkpoint_key=key,
                 )):
