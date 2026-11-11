@@ -1,6 +1,6 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-11 (after A039)
+Last updated: 2026-11-11 (after A040)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
@@ -26,9 +26,9 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 ## Known gaps vs goal
 1. DONE (metadata only): forex + CFD terms in A033 (`margin_instruments.py`). Still missing: margin-aware accounting, replay and risk for these products.
 2. DONE (offline): strategy interface A034 + margin-aware backtester A035 with costs, stop-out and metrics. Still missing: FX/account-currency conversion, session calendars wired into backtest, walk-forward/out-of-sample validation, real broker cost data, realistic strategies.
-3. BUY is always denied by design (A027 has no positive admission path) — needs an explicit governance decision to allow validated entries.
+3. BUY is always denied by the ORIGINAL governed paper path (A027 has no positive admission path). The new A035-A040 stack does not use A027; it is a separate research/execution track guarded by A039 limits. Decide whether/how A027-style evidence should gate it.
 4. A007 replay stays single-symbol/long-only/spot-style (untouched). A035 adds long/short margin backtesting for ONE instrument; no multi-instrument portfolio risk yet.
-5. No broker adapter (MT5/Opofinance), no live/demo connectivity.
+5. DONE (untested against a real terminal): MT5 demo adapter A040. Live trading remains unsupported by design.
 6. Native Windows checkpoint durability not done; MT5 Python package needs Windows + terminal.
 
 ## Progress log
@@ -42,13 +42,20 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A039 DONE: broker-neutral execution (`execution.py`): Broker interface, PaperBroker (margin, SL/TP gaps, stop-out, idempotent orders), GuardedBroker (risk limits, kill switch, fail-closed, LIVE refused), SignalExecutor. 27 new tests.
 
+- A040 DONE: MT5 demo-only adapter (`mt5_adapter.py`, `mt5_check.py`): refuses REAL/CONTEST accounts (checked on every action), no stored secrets, own-magic positions only, unknown outcomes fail closed. 18 new tests against a FAKE terminal only (never run against real MT5).
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
 2b. (done) FX conversion + sessions in backtests.
 2c. (done) A038 walk-forward harness.
 2d. (done) A039 execution + paper broker.
-2e. NEXT: A040 demo-only MT5 adapter (Opofinance-ready; needs Windows + MT5 terminal + demo credentials from the user); multi-instrument portfolio risk; forward paper-trading run on real data.
+2e. (done) A040 MT5 demo adapter.
+2f. NEXT: user runs `python -m ariyan_trading.mt5_check` on Windows with an Opofinance DEMO account (see A040 doc); then a candle-feed + scheduler loop for forward demo trading; multi-instrument portfolio risk; real historical data pipeline for forex/stocks.
+
+## Open questions for the user
+- Windows PC/VPS available? Opofinance demo account (login/server) created? Does Opofinance allow algorithmic trading / EAs on the account type?
+- Which instruments first (e.g. EURUSD, XAUUSD, BTCUSD, a stock CFD)?
 3. Decide the BUY-admission policy (what evidence unlocks entries).
 4. Broker-agnostic execution interface + MT5 adapter (demo only) for Opofinance.
 
