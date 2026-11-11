@@ -42,24 +42,13 @@ def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_sta
             report, _, _ = _inspect_pending_snapshot(
                 db, anchor, selector, expected_state_sha256=expected_state_sha256,
                 key=key, include_clearance_binding=include_clearance_binding,
+                include_unpublished_order=include_unpublished_order,
             )
-            if include_unpublished_order:
-                if report["anchor_position"] != "AT_PREVIOUS_VERIFIED_TIP":
-                    raise ValueError("Unpublished order review requires the previous verified anchor")
-                fields = ("request_id", "action", "quantity", "price", "cash_delta", "units_delta")
-                row = db.execute(
-                    "SELECT request_id,action,quantity,price,cash_delta,units_delta "
-                    "FROM ledger_entries WHERE sequence=?", (report["journal_sequence"],),
-                ).fetchone()
-                report["unpublished_order"] = {
-                    **dict(zip(fields, row, strict=True)),
-                    "authenticated_by_anchor": False,
-                }
     return report
 
 
 def _inspect_pending_snapshot(db, anchor, selector, *, expected_state_sha256, key,
-                              include_clearance_binding):
+                              include_clearance_binding, include_unpublished_order=False):
     """Inspect inside the caller's transaction and selector lock."""
     validate_ledger_schema(db)
     identity = read_ledger_identity(db)
@@ -112,7 +101,7 @@ def _inspect_pending_snapshot(db, anchor, selector, *, expected_state_sha256, ke
         "write_authorized": False,
         "live_authorized": False,
     }
-    if include_clearance_binding:
+    if include_clearance_binding or include_unpublished_order:
         binding = {
             "version": "ARIYAN-A059-PAPER-CLEARANCE-BINDING-V1",
             "ledger_identity": identity,
@@ -125,7 +114,23 @@ def _inspect_pending_snapshot(db, anchor, selector, *, expected_state_sha256, ke
             "anchor_position": position,
         }
         encoded = json.dumps(binding, sort_keys=True, separators=(",", ":")).encode("ascii")
-        report["clearance_binding_sha256"] = hashlib.sha256(encoded).hexdigest()
+        if include_clearance_binding:
+            report["clearance_binding_sha256"] = hashlib.sha256(encoded).hexdigest()
+        if include_unpublished_order:
+            if position != "AT_PREVIOUS_VERIFIED_TIP":
+                raise ValueError("Unpublished order review requires the previous verified anchor")
+            fields = ("request_id", "action", "quantity", "price", "cash_delta", "units_delta")
+            row = db.execute(
+                "SELECT request_id,action,quantity,price,cash_delta,units_delta "
+                "FROM ledger_entries WHERE sequence=?", (tip_sequence,),
+            ).fetchone()
+            report["unpublished_order"] = {
+                **dict(zip(fields, row, strict=True)),
+                "authenticated_by_anchor": False,
+            }
+            report["unpublished_order_review_sha256"] = hashlib.sha256(
+                b"ARIYAN-A063-UNPUBLISHED-ORDER-REVIEW-BINDING-V1\x00" + encoded
+            ).hexdigest()
     return report, marker[0], opening_cash
 
 

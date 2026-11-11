@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from ariyan_trading import checkpoint_coordinator, paper_pending_diagnostic as diagnostic
 from ariyan_trading.durable_ledger import DurableLedger
+from ariyan_trading.journal_commitment import entry_commitment
 from ariyan_trading.journal_store import verify_protected_journal
 from ariyan_trading.paper_active_selection import create_paper_active_selection
 from ariyan_trading.paper_entry import PaperExecutionDenied
@@ -21,6 +22,7 @@ from ariyan_trading.paper_pending_clearance import (
     clearance_payload, clear_published_pending_marker,
 )
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
+from ariyan_trading import paper_unpublished_order_review as order_review
 from ariyan_trading.trust_anchor import create_anchor, write_anchor
 
 
@@ -97,13 +99,16 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "previous verified anchor"):
             self.inspect(include_unpublished_order=True)
 
-    def test_cli_reviews_unpublished_order_without_changes(self):
+    def set_unpublished(self):
         self.set_pending()
         with closing(sqlite3.connect(self.database)) as db:
             genesis = db.execute(
                 "SELECT value FROM ledger_meta WHERE key='journal_genesis'"
             ).fetchone()[0]
         write_anchor(self.anchor, create_anchor(0, genesis, self.key), self.key)
+
+    def test_cli_reviews_unpublished_order_without_changes(self):
+        self.set_unpublished()
         inputs = (self.database, self.anchor, self.selector, self.state, self.key_file)
         before = tuple(path.read_bytes() for path in inputs)
         with redirect_stdout(io.StringIO()) as stdout:
@@ -120,6 +125,85 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
         })
         self.assertFalse(report["write_authorized"])
         self.assertEqual(before, tuple(path.read_bytes() for path in inputs))
+
+    def unpublished_review_intent(self):
+        report = self.inspect(include_unpublished_order=True, include_clearance_binding=True)
+        self.assertNotEqual(
+            report["clearance_binding_sha256"], report["unpublished_order_review_sha256"],
+        )
+        return {
+            "version": order_review.VERSION, "action": order_review.ACTION,
+            "unpublished_order_review_sha256": report["unpublished_order_review_sha256"],
+            "expires_at_ms": 100, "request_id": "seed", "side": "BUY",
+            "quantity": "1", "price": "10",
+        }
+
+    def assess_unpublished_review(self, signer, intent, **overrides):
+        options = {
+            "signature": signer.sign(order_review.unpublished_order_review_payload(intent)),
+            "expected_state_sha256": self.pin, "checkpoint_key": self.key,
+            "operator_public_key": signer.public_key().public_bytes_raw(), "as_of_ms": 99,
+        }
+        options.update(overrides)
+        return order_review.assess_unpublished_order_review(
+            self.database, self.anchor, self.selector, intent, **options,
+        )
+
+    def test_signed_unpublished_review_matches_independent_order_without_changes(self):
+        self.set_unpublished()
+        intent = self.unpublished_review_intent()
+        signer = Ed25519PrivateKey.generate()
+        files = (self.database, self.anchor, self.selector, self.state)
+        before = tuple(path.read_bytes() for path in files)
+        result = self.assess_unpublished_review(signer, intent)
+        self.assertEqual(result["status"], "SIGNED_REVIEW_MATCHES_UNPUBLISHED_PAPER_ORDER")
+        self.assertFalse(result["write_authorized"])
+        self.assertFalse(result["live_authorized"])
+        self.assertTrue(result["checkpoint_inspection"]["publication_pending"])
+        self.assertEqual(before, tuple(path.read_bytes() for path in files))
+
+    def test_signed_unpublished_review_rejects_wrong_order_signature_and_expiry(self):
+        self.set_unpublished()
+        intent = self.unpublished_review_intent()
+        signer = Ed25519PrivateKey.generate()
+        for field, value in (("request_id", "other"), ("side", "SELL"),
+                             ("quantity", "2"), ("price", "11")):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "Signed order differs"):
+                self.assess_unpublished_review(signer, {**intent, field: value})
+        other_key = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+        with self.assertRaisesRegex(ValueError, "Invalid operator review signature"):
+            self.assess_unpublished_review(signer, intent, operator_public_key=other_key)
+        with self.assertRaisesRegex(ValueError, "expired"):
+            self.assess_unpublished_review(signer, intent, as_of_ms=100)
+
+    def test_signed_unpublished_review_rejects_changed_marker_or_published_tip(self):
+        self.set_unpublished()
+        intent = self.unpublished_review_intent()
+        signer = Ed25519PrivateKey.generate()
+        report = self.inspect()
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE ledger_meta SET value=? WHERE key=?",
+                       ("b" * 32, checkpoint_coordinator.PENDING))
+        with self.assertRaisesRegex(ValueError, "freshly inspected checkpoint"):
+            self.assess_unpublished_review(signer, intent)
+        write_anchor(self.anchor, create_anchor(1, report["journal_digest"], self.key), self.key)
+        with self.assertRaisesRegex(ValueError, "previous verified anchor"):
+            self.assess_unpublished_review(signer, intent)
+
+    def test_signed_unpublished_review_rejects_rehashed_wrong_deltas(self):
+        self.set_unpublished()
+        report = self.inspect()
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE ledger_entries SET cash_delta='-1.00' WHERE sequence=1")
+            row = db.execute(
+                "SELECT sequence,request_id,action,quantity,price,cash_delta,units_delta "
+                "FROM ledger_entries WHERE sequence=1"
+            ).fetchone()
+            db.execute("UPDATE journal_commitments SET digest=? WHERE sequence=1",
+                       (entry_commitment(report["anchor_digest"], *row),))
+        intent = self.unpublished_review_intent()
+        with self.assertRaisesRegex(ValueError, "deltas differ"):
+            self.assess_unpublished_review(Ed25519PrivateKey.generate(), intent)
 
     def test_requires_pending_marker_matching_pin_and_freeze(self):
         with self.assertRaisesRegex(ValueError, "pending publication marker"):

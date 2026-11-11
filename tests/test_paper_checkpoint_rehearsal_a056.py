@@ -31,6 +31,7 @@ from ariyan_trading.paper_pending_clearance import (
 from ariyan_trading.paper_pending_diagnostic import inspect_pending_paper_checkpoint
 from ariyan_trading.paper_execution_controller import PaperExecutionController
 from ariyan_trading.paper_execution_state import create_pinned_paper_execution_state
+from ariyan_trading import paper_unpublished_order_review as order_review
 from ariyan_trading.paper_state_escalation import VERSION, escalation_payload
 from ariyan_trading.trust_anchor import create_anchor, read_anchor, write_anchor
 from test_paper_process_lock_a055 import _wait_for_file
@@ -138,6 +139,20 @@ class PaperCheckpointRehearsalTests(unittest.TestCase):
                         "price": "11.00", "cash_delta": "11.00", "units_delta": "-1.00000000",
                         "authenticated_by_anchor": False,
                     })
+                    review_intent = {
+                        "version": order_review.VERSION, "action": order_review.ACTION,
+                        "unpublished_order_review_sha256": report["unpublished_order_review_sha256"],
+                        "expires_at_ms": 100, "request_id": "in-progress", "side": "SELL",
+                        "quantity": "1", "price": "11.00",
+                    }
+                    review = order_review.assess_unpublished_order_review(
+                        database, anchor, selector, review_intent,
+                        signer.sign(order_review.unpublished_order_review_payload(review_intent)),
+                        expected_state_sha256=freeze_pin, checkpoint_key=key,
+                        operator_public_key=configuration["operator_public_key"], as_of_ms=99,
+                    )
+                    self.assertEqual(review["status"], "SIGNED_REVIEW_MATCHES_UNPUBLISHED_PAPER_ORDER")
+                    self.assertFalse(review["write_authorized"])
                 with self.assertRaisesRegex(ValueError, "pending or uncertain"), closing(DurableLedger(
                     database, checkpoint_path=anchor, checkpoint_key=key,
                 )):
