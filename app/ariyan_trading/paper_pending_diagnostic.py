@@ -40,10 +40,20 @@ def _validated_inputs(database, anchor, selector, key):
 
 def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_state_sha256, key,
                                      include_clearance_binding=False, include_unpublished_order=False,
-                                     recovery_status=False):
+                                     recovery_status=False, expected_cleared_tip=None):
     """Classify the anchor under FREEZE, optionally allowing an absent pending marker."""
     if recovery_status and (include_clearance_binding or include_unpublished_order):
         raise ValueError("Recovery status must be requested separately from signing evidence")
+    if expected_cleared_tip is not None:
+        if not recovery_status:
+            raise ValueError("An expected cleared tip requires recovery status mode")
+        if (
+            type(expected_cleared_tip) is not tuple or len(expected_cleared_tip) != 2
+            or type(expected_cleared_tip[0]) is not int or expected_cleared_tip[0] < 1
+            or type(expected_cleared_tip[1]) is not str
+            or not re.fullmatch(r"[0-9a-f]{64}", expected_cleared_tip[1])
+        ):
+            raise ValueError("Expected cleared tip requires a positive sequence and lowercase SHA-256")
     database, anchor, selector = _validated_inputs(database, anchor, selector, key)
     with initialization_lock(selector), localcontext(Context(prec=50)):
         with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as db:
@@ -54,6 +64,13 @@ def inspect_pending_paper_checkpoint(database, anchor, selector, *, expected_sta
                 include_unpublished_order=include_unpublished_order,
                 recovery_status=recovery_status,
             )
+            if expected_cleared_tip is not None:
+                if report["publication_pending"]:
+                    raise ValueError("Expected cleared tip still has a pending marker")
+                observed_tip = (report["journal_sequence"], report["journal_digest"])
+                if observed_tip != expected_cleared_tip:
+                    raise ValueError("Cleared journal tip differs from the independently retained tip")
+                report["expected_cleared_tip_verified"] = True
     return report
 
 
@@ -169,7 +186,14 @@ def main(argv=None):
                         help="Show the pending order when the anchor is one verified entry behind")
     parser.add_argument("--recovery-status", action="store_true",
                         help="Check recovery status even if the pending marker is absent")
+    parser.add_argument("--expected-cleared-sequence", type=int,
+                        help="Require the independently retained sequence after clearance")
+    parser.add_argument("--expected-cleared-digest",
+                        help="Require the independently retained journal digest after clearance")
     args = parser.parse_args(argv)
+    expected_tip = (args.expected_cleared_sequence, args.expected_cleared_digest)
+    if expected_tip != (None, None) and (None in expected_tip or not args.recovery_status):
+        parser.error("Both expected cleared tip options require --recovery-status")
     try:
         key_path = _input_path(args.checkpoint_key_file)
         if any(key_path.samefile(_input_path(path))
@@ -183,6 +207,7 @@ def main(argv=None):
             include_clearance_binding=args.include_clearance_binding,
             include_unpublished_order=args.include_unpublished_order,
             recovery_status=args.recovery_status,
+            expected_cleared_tip=None if expected_tip == (None, None) else expected_tip,
         )
     except (OSError, ValueError, TypeError, ArithmeticError, sqlite3.Error):
         parser.exit(2, "Pending checkpoint inspection rejected; no repair performed.\n")

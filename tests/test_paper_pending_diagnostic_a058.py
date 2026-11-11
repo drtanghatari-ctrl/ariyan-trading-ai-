@@ -332,6 +332,44 @@ class PaperPendingDiagnosticTests(unittest.TestCase):
             self.assertFalse(report[key])
         self.assertEqual(before, tuple(path.read_bytes() for path in files))
 
+    def test_expected_cleared_tip_cli_requires_both_values_and_verifies_match(self):
+        sequence, digest = trust_anchor.read_anchor(self.anchor, self.key)
+        args = [
+            "--database", str(self.database), "--anchor", str(self.anchor),
+            "--selector", str(self.selector), "--expected-state-sha256", self.pin,
+            "--checkpoint-key-file", str(self.key_file), "--recovery-status",
+            "--expected-cleared-sequence", str(sequence),
+        ]
+        with redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit) as error:
+            diagnostic.main(args)
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn("Both expected cleared tip options", stderr.getvalue())
+        with redirect_stdout(io.StringIO()) as stdout:
+            self.assertEqual(diagnostic.main([*args, "--expected-cleared-digest", digest]), 0)
+        self.assertTrue(json.loads(stdout.getvalue())["expected_cleared_tip_verified"])
+
+    def test_expected_cleared_tip_rejects_pending_marker_even_at_matching_anchor(self):
+        tip = trust_anchor.read_anchor(self.anchor, self.key)
+        self.set_pending()
+        with self.assertRaisesRegex(ValueError, "still has a pending marker"):
+            self.inspect(recovery_status=True, expected_cleared_tip=tip)
+
+    def test_expected_cleared_tip_rejects_coherent_older_database_and_anchor(self):
+        previous_database, previous_anchor = self.database.read_bytes(), self.anchor.read_bytes()
+        with closing(DurableLedger(self.database, opening_cash="1000.00")) as ledger:
+            checkpoint_coordinator.execute_checkpointed_trade(
+                ledger, "SELL", "second", "1", "11.00", anchor_path=self.anchor, key=self.key,
+            )
+        tip = trust_anchor.read_anchor(self.anchor, self.key)
+        self.assertTrue(self.inspect(
+            recovery_status=True, expected_cleared_tip=tip,
+        )["expected_cleared_tip_verified"])
+        self.database.write_bytes(previous_database)
+        self.anchor.write_bytes(previous_anchor)
+        self.assertEqual(self.inspect(recovery_status=True)["status"], "NO_PENDING_VERIFIED_TIP")
+        with self.assertRaisesRegex(ValueError, "differs from the independently retained tip"):
+            self.inspect(recovery_status=True, expected_cleared_tip=tip)
+
     def test_recovery_status_classifies_pending_tips_and_rejects_missing_marker_at_stale_tip(self):
         self.set_unpublished()
         self.assertEqual(self.inspect(recovery_status=True)["status"], "PENDING_AT_PREVIOUS_TIP")
