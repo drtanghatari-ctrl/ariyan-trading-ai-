@@ -1,6 +1,6 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-11 (after step 1)
+Last updated: 2026-11-11 (after step 2)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
@@ -25,18 +25,21 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 ## Known gaps vs goal
 1. DONE (metadata only): forex + CFD terms in A033 (`margin_instruments.py`). Still missing: margin-aware accounting, replay and risk for these products.
-2. Strategy is a toy 3/5 SMA crossover (engine.py); no real strategy framework or backtester metrics.
+2. DONE (offline): strategy interface A034 + margin-aware backtester A035 with costs, stop-out and metrics. Still missing: FX/account-currency conversion, session calendars wired into backtest, walk-forward/out-of-sample validation, real broker cost data, realistic strategies.
 3. BUY is always denied by design (A027 has no positive admission path) — needs an explicit governance decision to allow validated entries.
-4. Replay is single-symbol, long-only, spot-style; no shorting, leverage, margin, multi-instrument portfolio risk.
+4. A007 replay stays single-symbol/long-only/spot-style (untouched). A035 adds long/short margin backtesting for ONE instrument; no multi-instrument portfolio risk yet.
 5. No broker adapter (MT5/Opofinance), no live/demo connectivity.
 6. Native Windows checkpoint durability not done; MT5 Python package needs Windows + terminal.
 
 ## Progress log
 - Step 1 DONE: A033 forex/CFD instrument terms (lot, pip, margin rate, shorting, exact notional/margin/P&L in quote currency). 17 new tests. A012 untouched.
 
+- Step 2 DONE: A034 `strategies.py` (stateless Strategy, SmaCross, Momentum, BuyAndHold) and A035 `backtest.py` (next-open fills, spread, commission, financing, margin sizing, stop-out, ruin, metrics). 30 new tests. Smoke-run on real BTCUSDT sample OK (24 bars; plumbing only).
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
-2. Strategy interface + backtest metrics (return, drawdown, Sharpe, costs/spread).
+2. (done) Strategy interface + backtester.
+2b. Walk-forward/out-of-sample validation harness; multi-instrument portfolio risk; session calendars + FX conversion in backtests.
 3. Decide the BUY-admission policy (what evidence unlocks entries).
 4. Broker-agnostic execution interface + MT5 adapter (demo only) for Opofinance.
 
