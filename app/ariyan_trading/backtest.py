@@ -1,29 +1,34 @@
-"""A035 deterministic margin-aware offline backtest; research use only.
+"""A035/A036/A037 deterministic margin-aware offline backtest; research use only.
 
 One instrument, one position at a time, long or short. A decision made from a
-fully closed bar fills at the NEXT bar's open. All money is in the instrument's
-quote currency, which this module treats as the account currency (no
-conversion). No broker, ledger, authorization or live trading is involved, and
-results are descriptive history, not evidence of profitability or approval.
+fully closed bar fills at the NEXT bar's open. Prices and P&L arise in the
+instrument's quote currency; balance, margin, commission and financing are in the
+ACCOUNT currency. When they differ, conversion legs (A036) supply per-bar rates.
+Datasets may contain declared session closures (A037). No broker, ledger,
+authorization or live trading is involved, and results are descriptive history,
+not evidence of profitability or approval.
 """
 from dataclasses import dataclass
 from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
 from fractions import Fraction
 
+from .fx_conversion import ConversionLeg, build_rates, validate_path
 from .ledger_validation import bounded_decimal
 from .margin_instruments import MarginInstrumentSpec, Side
 from .market_data import CandleDataset, MAX_VALUE, number
+from .session_candles import SessionCandleDataset
 from .strategies import Signal, Strategy, MAX_LOOKBACK
 
 VERSION = 'ARIYAN-A035-BACKTEST-V1'
 CONTEXT = Context(prec=50, rounding=ROUND_HALF_EVEN)
 SIX = Decimal('0.000001')
 HUNDRED = Decimal(100)
-MS_PER_YEAR = 31_557_600_000
+FINANCING_BASES = ('BARS', 'ELAPSED')
 
 
 @dataclass(frozen=True)
 class BacktestConfig:
+    """Money fields are in the account currency, except `spread` (price units)."""
     opening_cash: str = '10000'
     margin_fraction: str = '0.05'
     spread: str = '0'
@@ -32,6 +37,8 @@ class BacktestConfig:
     financing_short_per_lot_per_bar: str = '0'
     liquidate_at_end: bool = True
     periods_per_year: int | None = None
+    account_currency: str | None = None   # None: the instrument's quote currency
+    financing_basis: str = 'BARS'         # ELAPSED charges every grid slot, gaps included
 
     def __post_init__(self):
         with localcontext(CONTEXT):
@@ -48,6 +55,12 @@ class BacktestConfig:
         if self.periods_per_year is not None and (
                 type(self.periods_per_year) is not int or not 1 <= self.periods_per_year <= 10_000_000):
             raise ValueError('periods_per_year must be a positive integer or None')
+        if self.account_currency is not None and (
+                type(self.account_currency) is not str or not self.account_currency
+                or len(self.account_currency) > 24):
+            raise ValueError('account_currency must be a short label or None')
+        if self.financing_basis not in FINANCING_BASES:
+            raise ValueError('financing_basis must be one of %s' % (FINANCING_BASES,))
 
 
 @dataclass(frozen=True)
@@ -58,18 +71,21 @@ class Trade:
     lots: Decimal
     entry_price: Decimal
     exit_price: Decimal
-    gross_pnl: Decimal
+    gross_pnl: Decimal      # account currency
     commission: Decimal
     financing: Decimal
     net_pnl: Decimal
     reason: str
+    fx_open: Decimal = Decimal(1)   # account per quote at entry
+    fx_close: Decimal = Decimal(1)  # account per quote used at exit
 
     def to_record(self):
         return {'side': self.side.value, 'open_ms': self.open_ms, 'close_ms': self.close_ms,
                 'lots': _text(self.lots), 'entry_price': _text(self.entry_price),
                 'exit_price': _text(self.exit_price), 'gross_pnl': _text(self.gross_pnl),
                 'commission': _text(self.commission), 'financing': _text(self.financing),
-                'net_pnl': _text(self.net_pnl), 'reason': self.reason}
+                'net_pnl': _text(self.net_pnl), 'reason': self.reason,
+                'fx_open': _text(self.fx_open), 'fx_close': _text(self.fx_close)}
 
 
 @dataclass(frozen=True)
@@ -99,17 +115,21 @@ def _floor_to_step(value, step):
 
 
 class _Position:
-    __slots__ = ('side', 'lots', 'entry', 'open_ms', 'commission', 'financing')
+    __slots__ = ('side', 'lots', 'entry', 'open_ms', 'commission', 'financing', 'fx_open',
+                 'last_charge_ms')
 
-    def __init__(self, side, lots, entry, open_ms, commission):
+    def __init__(self, side, lots, entry, open_ms, commission, fx_open, last_charge_ms):
         self.side, self.lots, self.entry = side, lots, entry
         self.open_ms, self.commission, self.financing = open_ms, commission, Decimal(0)
+        self.fx_open, self.last_charge_ms = fx_open, last_charge_ms
 
 
 class _Engine:
-    def __init__(self, spec, config):
+    def __init__(self, spec, config, interval_ms):
         self.spec = spec
         self.cs = spec.contract_size
+        self.interval_ms = interval_ms
+        self.elapsed = config.financing_basis == 'ELAPSED'
         self.half = Decimal(config.spread) / 2
         self.commission = Decimal(config.commission_per_lot_per_side)
         self.fin = {Side.LONG: Decimal(config.financing_long_per_lot_per_bar),
@@ -122,29 +142,30 @@ class _Engine:
         self.counts = {'stop_outs': 0, 'skipped_below_min_lot': 0, 'skipped_margin': 0,
                        'skipped_bad_price': 0, 'short_signals_ignored': 0, 'bars_in_position': 0}
 
-    def pnl(self, side, entry, exit_, lots):
+    def pnl_quote(self, side, entry, exit_, lots):
         move = exit_ - entry if side is Side.LONG else entry - exit_
         return move * lots * self.cs
 
-    def close(self, fill, timestamp_ms, reason):
+    def close(self, fill, timestamp_ms, reason, rate):
         p = self.position
-        gross = self.pnl(p.side, p.entry, fill, p.lots)
+        gross = self.pnl_quote(p.side, p.entry, fill, p.lots) * rate
         commission = self.commission * p.lots
         self.balance += gross - commission
         self.costs['commission'] += commission
-        self.costs['spread'] += self.half * p.lots * self.cs
+        self.costs['spread'] += self.half * p.lots * self.cs * rate
         total_commission = p.commission + commission
         self.trades.append(Trade(p.side, p.open_ms, timestamp_ms, p.lots, p.entry, fill, gross,
                                  total_commission, p.financing,
-                                 gross - total_commission - p.financing, reason))
+                                 gross - total_commission - p.financing, reason,
+                                 p.fx_open, rate))
         self.position = None
 
-    def open(self, side, price, timestamp_ms):
+    def open(self, side, price, timestamp_ms, rate):
         fill = price + self.half if side is Side.LONG else price - self.half
         if fill <= 0:
             self.counts['skipped_bad_price'] += 1
             return
-        per_lot_margin = fill * self.cs * self.spec.initial_margin_rate
+        per_lot_margin = fill * self.cs * self.spec.initial_margin_rate * rate
         lots = _floor_to_step(self.balance * self.margin_fraction / per_lot_margin, self.spec.lot_step)
         lots = min(lots, self.spec.maximum_lot)
         if lots < self.spec.minimum_lot:
@@ -156,35 +177,45 @@ class _Engine:
             return
         self.balance -= commission
         self.costs['commission'] += commission
-        self.costs['spread'] += self.half * lots * self.cs
-        self.position = _Position(side, lots, fill, timestamp_ms, commission)
+        self.costs['spread'] += self.half * lots * self.cs * rate
+        self.position = _Position(side, lots, fill, timestamp_ms, commission, rate,
+                                  timestamp_ms - self.interval_ms)
 
-    def rebalance(self, bar, target):
+    def rebalance(self, bar, target, rates):
         current = self.position.side if self.position else None
         wanted = None if target is Signal.FLAT else Side(target.value)
         if current is wanted:
             return
         if current is not None:
             fill = bar.open - self.half if current is Side.LONG else bar.open + self.half
-            self.close(fill, bar.timestamp_ms, 'SIGNAL')
+            self.close(fill, bar.timestamp_ms, 'SIGNAL', rates.open)
         if wanted is not None:
-            self.open(wanted, bar.open, bar.timestamp_ms)
+            self.open(wanted, bar.open, bar.timestamp_ms, rates.open)
 
-    def stop_out(self, bar):
-        """Test the bar's adverse extreme against maintenance margin; liquidate there."""
+    def stop_out(self, bar, rates):
+        """Test the bar's adverse extreme against maintenance margin; liquidate there.
+
+        Losses convert at the bar's highest account-per-quote rate and gains at its
+        lowest, which is deliberately pessimistic when conversion legs move.
+        """
         p = self.position
         worst = bar.low - self.half if p.side is Side.LONG else bar.high + self.half
-        equity = self.balance + self.pnl(p.side, p.entry, worst, p.lots)
-        if equity <= p.lots * self.cs * worst * self.spec.maintenance_margin_rate:
+        quote_pnl = self.pnl_quote(p.side, p.entry, worst, p.lots)
+        rate = rates.high if quote_pnl < 0 else rates.low
+        equity = self.balance + quote_pnl * rate
+        required = p.lots * self.cs * worst * self.spec.maintenance_margin_rate * rates.high
+        if equity <= required:
             side = p.side
-            self.close(worst, bar.timestamp_ms, 'STOP_OUT')
+            self.close(worst, bar.timestamp_ms, 'STOP_OUT', rate)
             self.counts['stop_outs'] += 1
             return side
         return None
 
-    def charge_financing(self):
+    def charge_financing(self, bar):
         p = self.position
-        charge = self.fin[p.side] * p.lots
+        units = (bar.timestamp_ms - p.last_charge_ms) // self.interval_ms if self.elapsed else 1
+        p.last_charge_ms = bar.timestamp_ms
+        charge = self.fin[p.side] * p.lots * units
         self.balance -= charge
         p.financing += charge
         self.costs['financing'] += charge
@@ -194,21 +225,23 @@ class _Engine:
         p = self.position
         return bar.close - self.half if p.side is Side.LONG else bar.close + self.half
 
-    def equity(self, bar):
+    def equity(self, bar, rates):
         if self.position is None:
             return self.balance
         p = self.position
-        return self.balance + self.pnl(p.side, p.entry, self.mark_price(bar), p.lots)
+        return self.balance + self.pnl_quote(p.side, p.entry, self.mark_price(bar), p.lots) * rates.close
 
 
-def run_backtest(dataset, spec, strategy, config=None):
+def run_backtest(dataset, spec, strategy, config=None, conversion=()):
     """Replay closed bars; decisions at a close fill at the next open.
 
     The caller asserts the dataset and spec describe the same instrument; only
-    the spec's effective interval is checked against the data range.
+    the spec's effective interval is checked against the data range. `conversion`
+    is a tuple of ConversionLeg objects from the quote currency to the account
+    currency (empty when they are the same).
     """
-    if type(dataset) is not CandleDataset:
-        raise ValueError('A validated CandleDataset is required')
+    if type(dataset) not in (CandleDataset, SessionCandleDataset):
+        raise ValueError('A validated candle dataset is required')
     if type(spec) is not MarginInstrumentSpec:
         raise ValueError('A MarginInstrumentSpec is required')
     if not isinstance(strategy, Strategy):
@@ -219,18 +252,21 @@ def run_backtest(dataset, spec, strategy, config=None):
     config = BacktestConfig() if config is None else config
     if type(config) is not BacktestConfig:
         raise ValueError('A BacktestConfig is required')
+    account = config.account_currency or spec.quote_currency
+    validate_path(conversion, spec.quote_currency, account)
     candles = dataset.candles
     if len(candles) <= lookback:
         raise ValueError('Dataset is too short for the strategy lookback')
     if not (spec.effective_at(candles[0].timestamp_ms) and spec.effective_at(candles[-1].timestamp_ms)):
         raise ValueError('Instrument spec is not effective across the dataset range')
     with localcontext(CONTEXT):
-        return _run(dataset, spec, strategy, config, lookback)
+        rates = build_rates(conversion, [c.timestamp_ms for c in candles])
+        return _run(dataset, spec, strategy, config, lookback, rates, account, conversion)
 
 
-def _run(dataset, spec, strategy, config, lookback):
+def _run(dataset, spec, strategy, config, lookback, rates, account, conversion):
     candles = dataset.candles
-    engine = _Engine(spec, config)
+    engine = _Engine(spec, config, dataset.interval_ms)
     opening = engine.balance
     curve = []
     target = Signal.FLAT
@@ -239,16 +275,16 @@ def _run(dataset, spec, strategy, config, lookback):
     last = len(candles) - 1
     for i, bar in enumerate(candles):
         if i > 0:
-            engine.rebalance(bar, target)
+            engine.rebalance(bar, target, rates[i])
         if engine.position is not None:
-            stopped = engine.stop_out(bar)
+            stopped = engine.stop_out(bar, rates[i])
             if stopped is not None:
                 blocked = stopped
                 if engine.balance <= 0:
                     ruined = True
         if engine.position is not None:
-            engine.charge_financing()
-        curve.append((bar.timestamp_ms, engine.equity(bar)))
+            engine.charge_financing(bar)
+        curve.append((bar.timestamp_ms, engine.equity(bar, rates[i])))
         if ruined:
             break
         if i + 1 >= lookback and i < last:
@@ -265,15 +301,18 @@ def _run(dataset, spec, strategy, config, lookback):
                     blocked = None
             target = raw
     if engine.position is not None and config.liquidate_at_end:
-        bar = candles[min(len(curve) - 1, last)]
-        engine.close(engine.mark_price(bar), bar.timestamp_ms, 'END')
+        index = len(curve) - 1
+        bar = candles[index]
+        engine.close(engine.mark_price(bar), bar.timestamp_ms, 'END', rates[index].close)
         curve[-1] = (bar.timestamp_ms, engine.balance)
-    metrics = _metrics(engine, opening, curve, config, dataset, ruined)
+    metrics = _metrics(engine, opening, curve, config, account)
     provenance = {
         'dataset_symbol': dataset.symbol, 'dataset_sha256': dataset.raw_sha256,
         'dataset_source': dataset.source, 'interval_ms': dataset.interval_ms,
         'as_of_ms': dataset.as_of_ms, 'bars': len(candles), 'first_ms': candles[0].timestamp_ms,
         'last_ms': candles[-1].timestamp_ms, 'instrument_fingerprint': spec.fingerprint(),
+        'session_schedule_sha256': (dataset.schedule.fingerprint()
+                                    if type(dataset) is SessionCandleDataset else None),
         'strategy': strategy.describe(),
         'config': {'opening_cash': config.opening_cash, 'margin_fraction': config.margin_fraction,
                    'spread': config.spread,
@@ -281,12 +320,17 @@ def _run(dataset, spec, strategy, config, lookback):
                    'financing_long_per_lot_per_bar': config.financing_long_per_lot_per_bar,
                    'financing_short_per_lot_per_bar': config.financing_short_per_lot_per_bar,
                    'liquidate_at_end': config.liquidate_at_end,
-                   'periods_per_year': config.periods_per_year},
-        'currency_note': 'All amounts are in the quote currency, treated as the account currency.'}
+                   'periods_per_year': config.periods_per_year,
+                   'account_currency': account, 'financing_basis': config.financing_basis},
+        'quote_currency': spec.quote_currency, 'account_currency': account,
+        'conversion': [leg.describe() for leg in conversion],
+        'currency_note': ('Prices are in the quote currency; balance, margin, commission and '
+                          'financing are in the account currency. Quote and account currency '
+                          + ('match.' if not conversion else 'differ; conversion legs were applied.'))}
     return BacktestResult(provenance, metrics, tuple(engine.trades), tuple(curve))
 
 
-def _metrics(engine, opening, curve, config, dataset, ruined):
+def _metrics(engine, opening, curve, config, account):
     final = curve[-1][1]
     peak, max_drawdown = opening, Decimal(0)
     returns, previous = [], opening
@@ -308,11 +352,13 @@ def _metrics(engine, opening, curve, config, dataset, ruined):
             if periods is not None:
                 annualized = sharpe * Decimal(periods).sqrt()
     bars = len(curve)
+    ruined = engine.balance <= 0 and engine.position is None
 
     def opt(value):
         return None if value is None else _text(value)
 
     return {
+        'account_currency': account,
         'opening_equity': _text(opening), 'final_equity': _text(final),
         'total_return_pct': _text((final / opening - 1) * HUNDRED),
         'max_drawdown_pct': _text(max_drawdown * HUNDRED),

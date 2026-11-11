@@ -1,6 +1,6 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-11 (after step 2)
+Last updated: 2026-11-11 (after A036/A037)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
@@ -36,10 +36,13 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - Step 2 DONE: A034 `strategies.py` (stateless Strategy, SmaCross, Momentum, BuyAndHold) and A035 `backtest.py` (next-open fills, spread, commission, financing, margin sizing, stop-out, ruin, metrics). 30 new tests. Smoke-run on real BTCUSDT sample OK (24 bars; plumbing only).
 
+- A036 DONE: account-currency conversion (multi-leg chains, direct/inverted, pessimistic stop-out rates). A037 DONE: session-aware datasets (validated closures), DST-aware daily/weekly schedule builders, elapsed-time financing, gap-through-stop-out. 30 new tests (1326 total).
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
-2b. Walk-forward/out-of-sample validation harness; multi-instrument portfolio risk; session calendars + FX conversion in backtests.
+2b. (done) FX conversion + sessions in backtests.
+2c. NEXT: A038 walk-forward harness; A039 broker-neutral execution + paper broker; A040 demo-only MT5 adapter; multi-instrument portfolio risk.
 3. Decide the BUY-admission policy (what evidence unlocks entries).
 4. Broker-agnostic execution interface + MT5 adapter (demo only) for Opofinance.
 

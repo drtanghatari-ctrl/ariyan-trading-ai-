@@ -47,20 +47,20 @@ isolated Decimal context, independent of the caller's.
 
 ## Limits (do not read results as validated)
 
-- All money is in the quote currency, treated as the account currency; no FX
-  conversion. A real forex account needs a conversion layer.
+- Account-currency conversion and session gaps are handled by A036/A037
+  (`A036_A037_CONVERSION_AND_SESSIONS.md`); without conversion legs the quote
+  currency is the account currency.
 - Intrabar order is unknown: stop-out uses the worst extreme, which is
   conservative, but entries at the open and no intrabar re-entry are assumptions.
-- No slippage beyond spread, partial fills, liquidity, requotes, gaps over
-  weekends, margin-call warnings, or broker-specific stop-out levels.
-- Continuous, epoch-aligned bars only (A007 rule). Forex weeks, stock sessions and
-  holidays need the session layer (A014/A015) wired in; do not backtest those
-  markets through gaps.
+- No slippage beyond spread, partial fills, liquidity, requotes, margin-call
+  warnings, or broker-specific stop-out levels.
+- Session-based markets need a `SessionCandleDataset` and a caller-declared
+  schedule; plain `CandleDataset` still requires continuous bars (A007 rule).
 - The spec and dataset are caller-asserted to describe the same instrument; only
   the spec's effective interval is checked. Real broker terms (contract size,
   margin, spread, swap) must be supplied from published specifications.
-- Parameters chosen after viewing results bias findings. No out-of-sample or
-  walk-forward procedure is provided here.
+- Parameters chosen after viewing results bias findings; use the walk-forward
+  harness (A038) instead of tuning on the full history.
 
 ## Checks
 
