@@ -20,6 +20,7 @@ PASSWORD = 'S3cret-demo-pass'
 
 class FakeMT5:
     ACCOUNT_TRADE_MODE_DEMO, ACCOUNT_TRADE_MODE_CONTEST, ACCOUNT_TRADE_MODE_REAL = 0, 1, 2
+    ACCOUNT_MARGIN_MODE_RETAIL_NETTING, ACCOUNT_MARGIN_MODE_EXCHANGE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING = 0, 1, 2
     TRADE_ACTION_DEAL, ORDER_TYPE_BUY, ORDER_TYPE_SELL, ORDER_TIME_GTC = 1, 0, 1, 0
     ORDER_FILLING_FOK, ORDER_FILLING_IOC, ORDER_FILLING_RETURN = 0, 1, 2
     SYMBOL_FILLING_FOK, SYMBOL_FILLING_IOC = 1, 2
@@ -27,9 +28,10 @@ class FakeMT5:
     TRADE_RETCODE_DONE, TRADE_RETCODE_REJECT, TRADE_RETCODE_NO_MONEY = 10009, 10006, 10019
     TRADE_RETCODE_TIMEOUT, TRADE_RETCODE_REQUOTE, TRADE_RETCODE_MARKET_CLOSED = 10012, 10004, 10018
 
-    def __init__(self, trade_mode=0, server='Demo-Server', filling=3):
+    def __init__(self, trade_mode=0, server='Demo-Server', filling=3, margin_mode=2):
         self.account = NS(trade_mode=trade_mode, server=server, trade_allowed=True, currency='USD',
-                          balance=10000.0, equity=10000.0, margin=0.0, margin_free=10000.0, login=123)
+                          balance=10000.0, equity=10000.0, margin=0.0, margin_free=10000.0, login=123,
+                          margin_mode=margin_mode)
         self.symbols = {'EURUSD.r': NS(volume_min=0.01, volume_max=100.0, volume_step=0.01,
                                        filling_mode=filling)}
         self.ticks = {'EURUSD.r': NS(bid=1.1, ask=1.1002, time_msc=5000)}
@@ -225,6 +227,47 @@ class MT5DemoBrokerA040Tests(unittest.TestCase):
         mt5.send_none = False
         self.assertTrue(guard.submit(order('G3')).reason.startswith('HALTED'))
         self.assertEqual(len(mt5.sent), 2)  # nothing more is sent while halted
+
+    def test_netting_accounts_never_merge_orders_into_an_existing_position(self):
+        broker, mt5 = connected(FakeMT5(margin_mode=0))
+        self.assertEqual(broker.account_type(), 'NETTING')
+        self.assertTrue(broker.submit(order('N1')).filled)
+        blocked = broker.submit(order('N2', side=SELL))
+        self.assertEqual((blocked.status, blocked.reason), ('REJECTED', 'NETTING_SYMBOL_ALREADY_HAS_POSITION'))
+        self.assertEqual(len(mt5.sent), 1)
+        self.assertTrue(broker.close_position('1001', 'NC1').filled)
+        self.assertTrue(broker.submit(order('N3', side=SELL)).filled)  # allowed once the symbol is flat
+
+    def test_a_manual_position_on_a_netting_account_also_blocks_new_orders(self):
+        broker, mt5 = connected(FakeMT5(margin_mode=0))
+        mt5.positions.append(NS(ticket=9, time_msc=1, type=0, volume=1.0, price_open=1.2, sl=0.0, tp=0.0,
+                                profit=0.0, symbol='EURUSD.r', comment='manual', magic=0))
+        self.assertEqual(broker.submit(order('M1')).reason, 'NETTING_SYMBOL_ALREADY_HAS_POSITION')
+        self.assertEqual(mt5.sent, [])
+
+    def test_exchange_and_unknown_account_types_are_treated_like_netting(self):
+        for mode, label in ((1, 'EXCHANGE'), (None, 'UNKNOWN'), (99, 'UNKNOWN')):
+            mt5 = FakeMT5(margin_mode=mode)
+            if mode is None:
+                del mt5.account.margin_mode
+            broker, _ = connected(mt5)
+            self.assertEqual(broker.account_type(), label)
+            self.assertTrue(broker.submit(order('E1')).filled)
+            self.assertEqual(broker.submit(order('E2')).reason, 'NETTING_SYMBOL_ALREADY_HAS_POSITION')
+
+    def test_hedging_accounts_still_allow_several_positions(self):
+        broker, mt5 = connected(FakeMT5(margin_mode=2))
+        self.assertEqual(broker.account_type(), 'HEDGING')
+        self.assertTrue(broker.submit(order('H1')).filled)
+        self.assertTrue(broker.submit(order('H2')).filled)
+        self.assertEqual(len(broker.positions()), 2)
+
+    def test_connection_check_reports_the_account_type(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            mt5_check.main(['--login', '123', '--server', 'Demo-Server'],
+                           mt5_module=FakeMT5(margin_mode=0), password=PASSWORD)
+        self.assertEqual(json.loads(out.getvalue())['margin_mode'], 'NETTING')
 
     def test_close_position_sends_the_opposite_deal(self):
         broker, mt5 = connected()

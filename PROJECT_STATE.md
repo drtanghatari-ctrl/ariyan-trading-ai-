@@ -44,6 +44,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A040 DONE: MT5 demo-only adapter (`mt5_adapter.py`, `mt5_check.py`): refuses REAL/CONTEST accounts (checked on every action), no stored secrets, own-magic positions only, unknown outcomes fail closed. 18 new tests against a FAKE terminal only (never run against real MT5).
 
+- 2026-11-12: user installed MT5 on a Windows laptop and logged in to Opofinance demo (Opogroup-Server1, USD, **Netting**). Adapter updated: netting/exchange/unknown accounts refuse orders on a symbol that already has a position; `mt5_check` reports margin mode. 5 new tests. Real connection check NOT yet run; charts/Market Watch were empty (no data) at last report.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.

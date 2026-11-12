@@ -64,6 +64,7 @@ class MT5DemoBroker(Broker):
         self._from_broker = {v: k for k, v in symbol_map.items()}
         self._expected_server = expected_server
         self._connected, self._currency, self._results = False, None, {}
+        self._margin_mode = None
 
     # ----- connection
     @property
@@ -108,7 +109,23 @@ class MT5DemoBroker(Broker):
         if not info.trade_allowed:
             raise MT5Error('Trading is disabled for this account in the terminal')
         self._currency = info.currency
+        self._margin_mode = getattr(info, 'margin_mode', None)
         return info
+
+    def account_type(self):
+        """HEDGING, NETTING, EXCHANGE or UNKNOWN, as reported by the terminal."""
+        mode = self._margin_mode
+        for name, label in (('ACCOUNT_MARGIN_MODE_RETAIL_HEDGING', 'HEDGING'),
+                            ('ACCOUNT_MARGIN_MODE_RETAIL_NETTING', 'NETTING'),
+                            ('ACCOUNT_MARGIN_MODE_EXCHANGE', 'EXCHANGE')):
+            if mode is not None and mode == getattr(self._mt5, name, object()):
+                return label
+        return 'UNKNOWN'
+
+    def _one_position_per_symbol(self):
+        # Netting and exchange accounts merge orders into one position per symbol; an unknown
+        # mode is treated the same way, which is the stricter rule.
+        return self.account_type() != 'HEDGING'
 
     def _ready(self):
         if not self._connected:
@@ -207,6 +224,14 @@ class MT5DemoBroker(Broker):
                 return result
         broker_symbol = self._broker_symbol(request.symbol)
         reject = lambda reason: self._remember(key, OrderResult(request.client_order_id, 'REJECTED', reason))
+        if self._one_position_per_symbol():
+            # Any position on the symbol, ours or manual, would absorb this order instead of
+            # opening a separate one. Close it first (close_position), then submit.
+            raw = self._mt5.positions_get()
+            if raw is None:
+                raise MT5Error('positions_get failed: %r' % (self._mt5.last_error(),))
+            if any(p.symbol == broker_symbol for p in raw):
+                return reject('NETTING_SYMBOL_ALREADY_HAS_POSITION')
         info = self._mt5.symbol_info(broker_symbol)
         if info is None or not self._mt5.symbol_select(broker_symbol, True):
             return reject('UNKNOWN_SYMBOL')

@@ -85,8 +85,14 @@ broker really behaves (fills, rejections, spreads, swaps).
   stops after entry.
 - Unrealized P&L is MT5's `profit` field (excludes swap and commission).
 - Account-currency conversion is done by MT5 itself; the adapter just reports it.
-- Hedging accounts are assumed (each deal makes its own position). On a netting
-  account, position IDs behave differently and this adapter has not been checked there.
+- **Account type.** The terminal reports hedging, netting or exchange margin mode
+  (`account_type()`, also shown by `mt5_check`). On a hedging account each order is its
+  own position. On a **netting or exchange account, or when the mode is unknown**, orders
+  on a symbol merge into one position, so the adapter refuses any new order while the
+  symbol already has a position (ours or manual), reporting
+  `NETTING_SYMBOL_ALREADY_HAS_POSITION`. Close first with `close_position`, then
+  submit; `SignalExecutor` already works in that order. Opofinance's demo account was
+  seen reporting **Netting**. Netting behavior is tested against the fake terminal only.
 - Real broker behavior (requotes, slippage, minimum stop distance, trading hours,
   execution delays) is unverified.
 

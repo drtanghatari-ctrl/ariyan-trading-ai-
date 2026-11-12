@@ -31,6 +31,7 @@ def main(argv=None, mt5_module=None, password=None):
         try:
             account = broker.account()
             report = {'connected': True, 'mode': account.mode.value, 'currency': account.currency,
+                      'margin_mode': broker.account_type(),
                       'balance': str(account.balance), 'equity': str(account.equity),
                       'open_positions_by_this_system': len(broker.positions())}
             if args.symbol:
