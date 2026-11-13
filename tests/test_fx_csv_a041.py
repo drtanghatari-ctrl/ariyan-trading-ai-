@@ -51,19 +51,19 @@ class FxCsvTests(unittest.TestCase):
         return '\n'.join(lines) + '\n'
 
     def test_stooq_style_daily_without_volume(self):
-        days = weekdays(date(2024, 1, 1), 40)
+        days = weekdays(date(2024, 1, 2), 40)
         text = self.daily_text('Date,Open,High,Low,Close', lambda d, o, h, l, c: f'{d},{o},{h},{l},{c}', days)
         ds, rep = load_fx_csv(self.write(text), symbol='EURUSD', source='synthetic stooq-like')
         self.assertEqual(len(ds.candles), 39)              # last candle dropped by default
         self.assertTrue(rep.dropped_last_candle)
         self.assertEqual(ds.interval_ms, DAY_MS)
-        self.assertEqual(ds.candles[0].timestamp_ms, utc_ms(2024, 1, 1))
+        self.assertEqual(ds.candles[0].timestamp_ms, utc_ms(2024, 1, 2))
         self.assertEqual(ds.candles[0].volume, 0)
         self.assertEqual(len(rep.runs), 1)                 # weekends accepted as declared closures
         self.assertEqual(rep.raw_sha256, hashlib.sha256(text.encode()).hexdigest())
 
     def test_yahoo_style_with_adj_close_and_null_row(self):
-        days = weekdays(date(2024, 1, 1), 60)
+        days = weekdays(date(2024, 1, 2), 60)
         lines = ['Date,Open,High,Low,Close,Adj Close,Volume']
         for i, day in enumerate(days):
             if i == 40:
@@ -130,6 +130,16 @@ class FxCsvTests(unittest.TestCase):
         ds2, rep2 = load_fx_csv(self.write(text2), symbol='EURUSD', source='s')
         self.assertEqual(rep2.dropped_outside_session, 1)
         self.assertEqual(len(ds2.candles), len(ds.candles))
+
+    def test_christmas_and_new_year_are_declared_closures_for_daily_bars(self):
+        days = [d for d in weekdays(date(2023, 12, 18), 20) if d not in (date(2023, 12, 25), date(2024, 1, 1))]
+        text = self.daily_text('Date,Open,High,Low,Close', lambda d, o, h, l, c: f'{d},{o},{h},{l},{c}', days)
+        path = self.write(text)
+        ds, rep = load_fx_csv(path, symbol='EURUSD', source='s')
+        self.assertEqual(len(rep.runs), 1)                         # one run across both holidays
+        self.assertEqual(len(ds.candles), len(days) - 1)
+        _, split = load_fx_csv(path, symbol='EURUSD', source='s', holidays=())
+        self.assertEqual(len(split.runs), 3)                       # undeclared holidays split the data
 
     def test_rejections(self):
         days = weekdays(date(2024, 1, 1), 10)

@@ -184,13 +184,17 @@ def _runs(candles, interval_ms, schedule):
 
 def load_fx_csv(path, *, symbol, source, interval_ms=None, timezone_name=None, utc_offset_minutes=None,
                 on_bad_row='raise', keep_longest_run=True, drop_last_candle=True, schedule=None,
-                as_of_ms=None):
+                as_of_ms=None, holidays=None):
     """Return (SessionCandleDataset, ImportReport). Raises ValueError on anything unusable.
 
     interval_ms: bar length; inferred from the most common spacing when omitted.
     schedule: optional SessionSchedule (e.g. an equity session); otherwise forex defaults are
     built: weekly Sunday 17:00 to Friday 17:00 New York for intraday bars, Monday-Friday UTC days
     for daily bars. Intervals above one day are unsupported.
+    holidays: dates declared closed in the DEFAULT DAILY schedule. When None, December 25 and
+    January 1 of every year in range are declared closed, because brokers publish no bars on them;
+    pass () to declare none. Ignored for intraday bars and for a caller-supplied schedule (intraday
+    holiday gaps split the data into gap-free runs instead).
     """
     if on_bad_row not in ('raise', 'skip'):
         raise ValueError("on_bad_row must be 'raise' or 'skip'")
@@ -221,8 +225,11 @@ def load_fx_csv(path, *, symbol, source, interval_ms=None, timezone_name=None, u
         last = datetime.fromtimestamp(candles[-1].timestamp_ms / 1000, timezone.utc).date() + timedelta(days=8)
         label = 'IMPORTED-FX-DEFAULT-SESSIONS (caller declaration, no holidays)'
         if interval_ms == DAY_MS:
+            if holidays is None:
+                holidays = [date(year, month, day) for year in range(first.year, last.year + 1)
+                            for month, day in ((1, 1), (12, 25))]
             schedule = daily_session_schedule('IMPORTED-FX-DAILY', 'UTC', (0, 1, 2, 3, 4), time(0), time(23, 59, 59),
-                                              first, last, label, as_of_ms)
+                                              first, last, label, as_of_ms, holidays=tuple(holidays))
         else:
             schedule = weekly_session_schedule('IMPORTED-FX-WEEKLY', 'America/New_York', 6, time(17), 4, time(17),
                                                first, last, label, as_of_ms)
