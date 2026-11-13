@@ -319,6 +319,16 @@ class MT5DemoBrokerA040Tests(unittest.TestCase):
         self.assertEqual(mt5.sent, [])
         self.assertEqual(mt5.shutdowns, 1)
 
+    def test_check_cli_symbol_map_reads_the_broker_name(self):
+        mt5, out = FakeMT5(), io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = mt5_check.main(['--login', '123', '--server', 'Demo-Server', '--symbol', 'EURUSD',
+                                   '--symbol-map', 'EURUSD=EURUSD.r'], mt5_module=mt5, password=PASSWORD)
+        self.assertEqual((code, json.loads(out.getvalue())['quote']['ask']), (0, '1.1002'))
+        with self.assertRaises(SystemExit):
+            mt5_check.main(['--login', '1', '--server', 'S', '--symbol-map', 'bad'], mt5_module=FakeMT5(),
+                           password=PASSWORD)
+
     def test_connection_check_refuses_real_accounts(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

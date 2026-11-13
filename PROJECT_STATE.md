@@ -1,6 +1,6 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-11 (after A040)
+Last updated: 2026-11-13 (after A041; broker now LiteFinance demo)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
@@ -46,6 +46,9 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - 2026-11-12: user installed MT5 on a Windows laptop and logged in to Opofinance demo (Opogroup-Server1, USD, **Netting**). Adapter updated: netting/exchange/unknown accounts refuse orders on a symbol that already has a position; `mt5_check` reports margin mode. 5 new tests. Real connection check NOT yet run; charts/Market Watch were empty (no data) at last report.
 
+- 2026-11-13: BROKER CHANGED. Opofinance demo never connected (laptop network/auth problems, hours lost). User opened a LiteFinance demo: login 91565990, server `LiteFinance-MT5-Demo`, **Hedge** account, symbols carry suffix `_o` (e.g. `EURUSD_o`). MT5 terminal now connects (AWS Frankfurt, ~112 ms) and shows real EURUSD candles. Journal says "trading has been disabled - disabled on server": probably logged in with the INVESTOR (read-only) password; orders would fail until the trading password is used. Algo Trading button was off. `mt5_check` gained `--symbol-map EURUSD=EURUSD_o`. The real connection check has NOT been run yet.
+- A041 DONE: offline FX/CSV importer (`fx_csv.py`, `fx_csv_check.py`): Stooq/Yahoo/Dukascopy/MT5/canonical headers, explicit timezone, drops out-of-session bars, keeps longest gap-free run, never repairs. 8 new tests (1396 total). Tested on synthetic files only. The cloud workspace cannot download market data (shell proxy blocks data sites; web-fetch summarises and is unreliable), so real data must be downloaded on the user's laptop (or exported from MT5 History Center) and sent here.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
@@ -53,7 +56,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 2c. (done) A038 walk-forward harness.
 2d. (done) A039 execution + paper broker.
 2e. (done) A040 MT5 demo adapter.
-2f. NEXT: user runs `python -m ariyan_trading.mt5_check` on Windows with an Opofinance DEMO account (see A040 doc); then a candle-feed + scheduler loop for forward demo trading; multi-instrument portfolio risk; real historical data pipeline for forex/stocks.
+2g. NEXT (2026-11-13): (a) user runs `mt5_check` against LiteFinance demo with `--symbol-map EURUSD=EURUSD_o`; (b) user exports EURUSD history (MT5 History Center or a free download) and runs `fx_csv_check`; (c) real EURUSD backtest + walk-forward; (d) candle feed + forward demo loop only after (a) works and the user enables orders.
+2f. (older, superseded by 2g) user runs `python -m ariyan_trading.mt5_check` on Windows with an Opofinance DEMO account (see A040 doc); then a candle-feed + scheduler loop for forward demo trading; multi-instrument portfolio risk; real historical data pipeline for forex/stocks.
 
 ## Open questions for the user
 - Windows PC/VPS available? Opofinance demo account (login/server) created? Does Opofinance allow algorithmic trading / EAs on the account type?
