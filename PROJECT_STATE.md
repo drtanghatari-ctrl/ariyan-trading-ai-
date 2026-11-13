@@ -55,6 +55,9 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - 2026-11-13 10:49 Tehran: A042 `forward_demo --max-steps 1` RAN CLEANLY on the real MetaQuotes-Demo terminal (paper_only true, orders_sent_to_mt5 0). User also exported EURUSD D1 history from MT5: 2079 bars (2018-11-13 to 2026-11-13); file not yet received here. User gets code via ZIP sent in chat (ariyan_A042_new.zip), not GitHub.
 
+- 2026-11-13 11:28 Tehran: user's continuous `forward_demo` run crashed on the real terminal with "Too many decimal places" (float noise in MT5 quote). FIXED: `_dec` in mt5_adapter now rounds floats to 8 places; regression test added.
+- A043 DONE: `strategies_extra.py` (TrendFilter, DonchianBreakout, RsiReversion, BollingerReversion, Ensemble) + `A043_STRATEGY_CATALOG.md` with evidence and sources (AQR Trends Everywhere, BIS WP366, Quantopian overfitting study). `forward_demo --strategy` accepts trend:/donchian:/rsi/boll and `+` ensembles. 1420 tests pass. No profitability claim; judge via walk-forward on real data (EURUSD D1 export of 2079 bars still not received here).
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.

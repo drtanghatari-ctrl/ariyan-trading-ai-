@@ -130,6 +130,25 @@ class ForwardA042Tests(unittest.TestCase):
         self.assertEqual(events.count('ERROR'), 3)
         self.assertEqual(events[-1], 'STOPPED')
 
+    def test_float_noise_in_terminal_quotes_and_candles_is_cleaned(self):
+        # Regression: a real run stopped with "Too many decimal places" on a noisy double.
+        mt5 = FakeFeed([1.10, 1.09, 1.08])
+        mt5.ticks['EURUSD.r'] = NS(bid=1.1057700000000002, ask=1.10579, time_msc=5000)
+        broker = connect(mt5)
+        quote = broker.quote('EURUSD')
+        self.assertEqual((quote.bid, quote.ask), (D('1.10577'), D('1.10579')))
+        runner = ForwardPaperRunner(broker, SmaCross(2, 3), 'EURUSD', 'H1', '0.01', 'FWD-T5', self.logfile())
+        mt5.ticks['EURUSD.r'] = NS(bid=1.1058100000000001, ask=1.1058300000000001, time_msc=6000)
+        runner.step()
+        mt5.account.balance = 10000.300000000001
+        self.assertEqual(broker.account().balance, D('10000.3'))
+
+    def test_cli_accepts_the_new_strategies_and_ensembles(self):
+        for text in ('trend:200', 'donchian:20:10:short', 'rsi', 'boll:short', 'trend:200+donchian:20:10+boll'):
+            self.assertTrue(forward_demo.parse_strategy(text).lookback >= 1, text)
+        with self.assertRaises(ValueError):
+            forward_demo.parse_strategy('donchian:20')
+
     def test_cli_single_step_and_bad_strategy(self):
         mt5, path, out = FakeFeed([1.1, 1.1, 1.1]), self.logfile(), io.StringIO()
         with contextlib.redirect_stdout(out):

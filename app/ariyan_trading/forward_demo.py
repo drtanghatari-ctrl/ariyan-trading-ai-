@@ -4,8 +4,9 @@
     python -m ariyan_trading.forward_demo --login 115560232 --server MetaQuotes-Demo --symbol EURUSD ^
         --timeframe H1 --strategy sma:10:30 --lots 0.01 --log forward_log.jsonl
 
-Stop with Ctrl+C. Use --max-steps 1 for a single dry check. Strategies: hold, sma:SHORT:LONG[:short],
-momentum:BARS[:short] (append :short to allow short positions).
+Stop with Ctrl+C. Use --max-steps 1 for a single dry check. Strategies: hold, sma:SHORT:LONG,
+momentum:BARS, trend:WINDOW, donchian:ENTRY:EXIT, rsi, boll (append :short to allow short positions);
+join several with + for a majority vote, e.g. trend:200+donchian:20:10+boll.
 """
 import argparse
 import getpass
@@ -16,9 +17,12 @@ import time
 from .forward import ForwardPaperRunner
 from .mt5_adapter import MT5DemoBroker, MT5Error, load_mt5
 from .strategies import BuyAndHold, Momentum, SmaCross
+from .strategies_extra import (
+    BollingerReversion, DonchianBreakout, Ensemble, RsiReversion, TrendFilter,
+)
 
 
-def parse_strategy(text):
+def _parse_one(text):
     parts = text.split(':')
     kind, args = parts[0], parts[1:]
     allow_short = bool(args) and args[-1] == 'short'
@@ -31,9 +35,25 @@ def parse_strategy(text):
             return SmaCross(int(args[0]), int(args[1]), allow_short=allow_short)
         if kind == 'momentum' and len(args) == 1:
             return Momentum(int(args[0]), allow_short=allow_short)
+        if kind == 'trend' and len(args) == 1:
+            return TrendFilter(int(args[0]), allow_short=allow_short)
+        if kind == 'donchian' and len(args) == 2:
+            return DonchianBreakout(int(args[0]), int(args[1]), allow_short=allow_short)
+        if kind == 'rsi' and not args:
+            return RsiReversion(allow_short=allow_short)
+        if kind == 'boll' and not args:
+            return BollingerReversion(allow_short=allow_short)
     except ValueError as exc:
         raise ValueError('Bad strategy %r: %s' % (text, exc)) from exc
-    raise ValueError('Strategy must look like hold, sma:10:30, sma:10:30:short or momentum:20')
+    raise ValueError('Unknown strategy %r' % text)
+
+
+def parse_strategy(text):
+    """hold, sma:10:30, momentum:20, trend:200, donchian:20:10, rsi, boll; add :short to allow shorts.
+    Join several with + for a majority-vote ensemble, e.g. trend:200+donchian:20:10+boll"""
+    if '+' in text:
+        return Ensemble(tuple(_parse_one(part) for part in text.split('+')))
+    return _parse_one(text)
 
 
 def main(argv=None, mt5_module=None, password=None, sleep=time.sleep):

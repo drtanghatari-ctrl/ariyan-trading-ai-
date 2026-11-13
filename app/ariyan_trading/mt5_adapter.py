@@ -44,6 +44,10 @@ def load_mt5():
 
 
 def _dec(value):
+    # Terminal numbers are doubles already rounded to the instrument's digits. Rounding to 8
+    # places only strips binary float noise (1.1057700000000002) and never changes a real value.
+    if isinstance(value, float):
+        return Decimal(str(round(value, 8)))
     return Decimal(str(value))
 
 
