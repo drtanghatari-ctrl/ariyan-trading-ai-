@@ -1,0 +1,484 @@
+{
+  "data": {
+    "candles": 2076,
+    "dropped_outside_session": 2,
+    "first_ms": 1542067200000,
+    "last_ms": 1794441600000,
+    "runs": 1,
+    "sha256": "b91fd22f64bc5af3fa21c01bf4b1e04795b80f7f8abd29ee6420b81e307bf037"
+  },
+  "fixed_strategies": {
+    "no_swap": {
+      "bollinger_20_2_long_only": {
+        "exposure_pct": "29.287091",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "6.793998",
+        "sharpe_annualized": "0.255569",
+        "spread_cost": "41.000000",
+        "total_return_pct": "7.361000",
+        "trades": 44
+      },
+      "bollinger_20_2_long_short": {
+        "exposure_pct": "55.154143",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "7.600088",
+        "sharpe_annualized": "0.292787",
+        "spread_cost": "81.600000",
+        "total_return_pct": "11.804100",
+        "trades": 84
+      },
+      "buy_and_hold": {
+        "exposure_pct": "99.951830",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "20.192407",
+        "sharpe_annualized": "-0.004756",
+        "spread_cost": "0.800000",
+        "total_return_pct": "-1.888800",
+        "trades": 1
+      },
+      "donchian_20_10_long_short": {
+        "exposure_pct": "68.159923",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "12.513300",
+        "sharpe_annualized": "-0.016937",
+        "spread_cost": "69.700000",
+        "total_return_pct": "-1.916100",
+        "trades": 88
+      },
+      "donchian_55_20_long_short": {
+        "exposure_pct": "56.069364",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "12.090754",
+        "sharpe_annualized": "-0.105131",
+        "spread_cost": "31.100000",
+        "total_return_pct": "-5.357800",
+        "trades": 39
+      },
+      "ensemble_trend_donchian_momentum": {
+        "exposure_pct": "86.801541",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "16.543666",
+        "sharpe_annualized": "0.169144",
+        "spread_cost": "48.400000",
+        "total_return_pct": "7.087100",
+        "trades": 54
+      },
+      "ensemble_trend_donchian_rsi": {
+        "exposure_pct": "56.791908",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "12.678226",
+        "sharpe_annualized": "-0.149221",
+        "spread_cost": "55.500000",
+        "total_return_pct": "-7.324300",
+        "trades": 68
+      },
+      "momentum_126_long_short": {
+        "exposure_pct": "93.882466",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "18.620681",
+        "sharpe_annualized": "0.261449",
+        "spread_cost": "74.000000",
+        "total_return_pct": "12.476500",
+        "trades": 79
+      },
+      "rsi2_reversion_long_only": {
+        "exposure_pct": "8.815029",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "6.807900",
+        "sharpe_annualized": "-0.294432",
+        "spread_cost": "32.200000",
+        "total_return_pct": "-4.778300",
+        "trades": 40
+      },
+      "rsi2_reversion_long_short": {
+        "exposure_pct": "16.618497",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "7.628472",
+        "sharpe_annualized": "-0.117332",
+        "spread_cost": "65.800000",
+        "total_return_pct": "-3.142700",
+        "trades": 78
+      },
+      "sma_50_200_long_only": {
+        "exposure_pct": "41.763006",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "15.289725",
+        "sharpe_annualized": "-0.054113",
+        "spread_cost": "6.000000",
+        "total_return_pct": "-2.397600",
+        "trades": 7
+      },
+      "sma_50_200_long_short": {
+        "exposure_pct": "90.366089",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "28.724260",
+        "sharpe_annualized": "-0.080389",
+        "spread_cost": "12.700000",
+        "total_return_pct": "-5.392400",
+        "trades": 15
+      },
+      "trend_200_long_only": {
+        "exposure_pct": "44.990366",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "10.933254",
+        "sharpe_annualized": "0.143252",
+        "spread_cost": "24.500000",
+        "total_return_pct": "4.471200",
+        "trades": 28
+      },
+      "trend_200_long_short": {
+        "exposure_pct": "90.366089",
+        "financing_cost": "0.000000",
+        "max_drawdown_pct": "17.444527",
+        "sharpe_annualized": "0.176651",
+        "spread_cost": "51.100000",
+        "total_return_pct": "7.603800",
+        "trades": 57
+      }
+    },
+    "swap_6usd_per_lot_per_day_both_ways": {
+      "bollinger_20_2_long_only": {
+        "exposure_pct": "29.287091",
+        "financing_cost": "465.600000",
+        "max_drawdown_pct": "9.212925",
+        "sharpe_annualized": "0.106260",
+        "spread_cost": "40.200000",
+        "total_return_pct": "2.663600",
+        "trades": 44
+      },
+      "bollinger_20_2_long_short": {
+        "exposure_pct": "55.154143",
+        "financing_cost": "905.040000",
+        "max_drawdown_pct": "11.803889",
+        "sharpe_annualized": "0.094765",
+        "spread_cost": "79.000000",
+        "total_return_pct": "2.939500",
+        "trades": 84
+      },
+      "buy_and_hold": {
+        "exposure_pct": "99.951830",
+        "financing_cost": "1402.080000",
+        "max_drawdown_pct": "23.809597",
+        "sharpe_annualized": "-0.272096",
+        "spread_cost": "0.800000",
+        "total_return_pct": "-15.909600",
+        "trades": 1
+      },
+      "donchian_20_10_long_short": {
+        "exposure_pct": "68.159923",
+        "financing_cost": "879.960000",
+        "max_drawdown_pct": "16.179100",
+        "sharpe_annualized": "-0.243704",
+        "spread_cost": "66.300000",
+        "total_return_pct": "-11.197200",
+        "trades": 88
+      },
+      "donchian_55_20_long_short": {
+        "exposure_pct": "56.069364",
+        "financing_cost": "734.460000",
+        "max_drawdown_pct": "15.985055",
+        "sharpe_annualized": "-0.318837",
+        "spread_cost": "29.300000",
+        "total_return_pct": "-13.478400",
+        "trades": 39
+      },
+      "ensemble_trend_donchian_momentum": {
+        "exposure_pct": "86.801541",
+        "financing_cost": "1255.440000",
+        "max_drawdown_pct": "20.128554",
+        "sharpe_annualized": "-0.072378",
+        "spread_cost": "45.400000",
+        "total_return_pct": "-4.992400",
+        "trades": 54
+      },
+      "ensemble_trend_donchian_rsi": {
+        "exposure_pct": "56.791908",
+        "financing_cost": "780.000000",
+        "max_drawdown_pct": "18.198072",
+        "sharpe_annualized": "-0.342057",
+        "spread_cost": "53.700000",
+        "total_return_pct": "-14.872100",
+        "trades": 68
+      },
+      "momentum_126_long_short": {
+        "exposure_pct": "93.882466",
+        "financing_cost": "1397.340000",
+        "max_drawdown_pct": "22.398444",
+        "sharpe_annualized": "0.016146",
+        "spread_cost": "68.200000",
+        "total_return_pct": "-0.760700",
+        "trades": 79
+      },
+      "rsi2_reversion_long_only": {
+        "exposure_pct": "8.815029",
+        "financing_cost": "117.780000",
+        "max_drawdown_pct": "7.711500",
+        "sharpe_annualized": "-0.371756",
+        "spread_cost": "32.100000",
+        "total_return_pct": "-5.982500",
+        "trades": 40
+      },
+      "rsi2_reversion_long_short": {
+        "exposure_pct": "16.618497",
+        "financing_cost": "228.720000",
+        "max_drawdown_pct": "8.854405",
+        "sharpe_annualized": "-0.220750",
+        "spread_cost": "65.000000",
+        "total_return_pct": "-5.563300",
+        "trades": 78
+      },
+      "sma_50_200_long_only": {
+        "exposure_pct": "41.763006",
+        "financing_cost": "604.740000",
+        "max_drawdown_pct": "17.823505",
+        "sharpe_annualized": "-0.219634",
+        "spread_cost": "5.800000",
+        "total_return_pct": "-7.698200",
+        "trades": 7
+      },
+      "sma_50_200_long_short": {
+        "exposure_pct": "90.366089",
+        "financing_cost": "1245.120000",
+        "max_drawdown_pct": "33.424133",
+        "sharpe_annualized": "-0.358148",
+        "spread_cost": "12.100000",
+        "total_return_pct": "-18.042300",
+        "trades": 15
+      },
+      "trend_200_long_only": {
+        "exposure_pct": "44.990366",
+        "financing_cost": "652.500000",
+        "max_drawdown_pct": "12.377812",
+        "sharpe_annualized": "-0.047819",
+        "spread_cost": "23.600000",
+        "total_return_pct": "-2.427400",
+        "trades": 28
+      },
+      "trend_200_long_short": {
+        "exposure_pct": "90.366089",
+        "financing_cost": "1303.440000",
+        "max_drawdown_pct": "21.052082",
+        "sharpe_annualized": "-0.070461",
+        "spread_cost": "47.600000",
+        "total_return_pct": "-5.016000",
+        "trades": 57
+      }
+    }
+  },
+  "walk_forward": {
+    "no_swap": {
+      "all_families": {
+        "aggregate": {
+          "candidates_per_fold": 50,
+          "compounded_benchmark_return_pct": "1.053158",
+          "compounded_oos_return_pct": "2.562319",
+          "distinct_selected_candidates": 4,
+          "excess_over_benchmark_pct": "1.509161",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "6.714290",
+          "mean_in_sample_return_pct": "6.983360",
+          "mean_oos_return_pct": "0.269070",
+          "oos_trades": 20,
+          "profitable_fold_pct": "40.000000",
+          "profitable_folds": 4,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "7.215779",
+          "worst_fold_return_pct": "-1.920800"
+        },
+        "candidates": 50
+      },
+      "donchian": {
+        "aggregate": {
+          "candidates_per_fold": 16,
+          "compounded_benchmark_return_pct": "1.053158",
+          "compounded_oos_return_pct": "6.577645",
+          "distinct_selected_candidates": 5,
+          "excess_over_benchmark_pct": "5.524488",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "3.557730",
+          "mean_in_sample_return_pct": "4.211410",
+          "mean_oos_return_pct": "0.653680",
+          "oos_trades": 17,
+          "profitable_fold_pct": "50.000000",
+          "profitable_folds": 5,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "4.124538",
+          "worst_fold_return_pct": "-1.920800"
+        },
+        "candidates": 16
+      },
+      "rsi_reversion": {
+        "aggregate": {
+          "candidates_per_fold": 6,
+          "compounded_benchmark_return_pct": "1.053158",
+          "compounded_oos_return_pct": "2.803296",
+          "distinct_selected_candidates": 4,
+          "excess_over_benchmark_pct": "1.750138",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "2.268320",
+          "mean_in_sample_return_pct": "2.551130",
+          "mean_oos_return_pct": "0.282810",
+          "oos_trades": 31,
+          "profitable_fold_pct": "40.000000",
+          "profitable_folds": 4,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "2.682400",
+          "worst_fold_return_pct": "-1.485000"
+        },
+        "candidates": 6
+      },
+      "sma_cross": {
+        "aggregate": {
+          "candidates_per_fold": 18,
+          "compounded_benchmark_return_pct": "1.053158",
+          "compounded_oos_return_pct": "1.943840",
+          "distinct_selected_candidates": 7,
+          "excess_over_benchmark_pct": "0.890682",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "7.967550",
+          "mean_in_sample_return_pct": "8.295270",
+          "mean_oos_return_pct": "0.327720",
+          "oos_trades": 25,
+          "profitable_fold_pct": "30.000000",
+          "profitable_folds": 3,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "8.052270",
+          "worst_fold_return_pct": "-6.789600"
+        },
+        "candidates": 18
+      },
+      "trend_filter": {
+        "aggregate": {
+          "candidates_per_fold": 10,
+          "compounded_benchmark_return_pct": "1.053158",
+          "compounded_oos_return_pct": "-1.112587",
+          "distinct_selected_candidates": 8,
+          "excess_over_benchmark_pct": "-2.165745",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "10.441420",
+          "mean_in_sample_return_pct": "10.411470",
+          "mean_oos_return_pct": "-0.029950",
+          "oos_trades": 56,
+          "profitable_fold_pct": "30.000000",
+          "profitable_folds": 3,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "8.089088",
+          "worst_fold_return_pct": "-5.984500"
+        },
+        "candidates": 10
+      }
+    },
+    "swap_6usd_per_lot_per_day_both_ways": {
+      "all_families": {
+        "aggregate": {
+          "candidates_per_fold": 50,
+          "compounded_benchmark_return_pct": "-7.972655",
+          "compounded_oos_return_pct": "-0.219782",
+          "distinct_selected_candidates": 4,
+          "excess_over_benchmark_pct": "7.752872",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "5.302610",
+          "mean_in_sample_return_pct": "5.297300",
+          "mean_oos_return_pct": "-0.005310",
+          "oos_trades": 20,
+          "profitable_fold_pct": "40.000000",
+          "profitable_folds": 4,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "7.447348",
+          "worst_fold_return_pct": "-2.503000"
+        },
+        "candidates": 50
+      },
+      "donchian": {
+        "aggregate": {
+          "candidates_per_fold": 16,
+          "compounded_benchmark_return_pct": "-7.972655",
+          "compounded_oos_return_pct": "3.944945",
+          "distinct_selected_candidates": 5,
+          "excess_over_benchmark_pct": "11.917600",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "2.361220",
+          "mean_in_sample_return_pct": "2.762360",
+          "mean_oos_return_pct": "0.401140",
+          "oos_trades": 17,
+          "profitable_fold_pct": "40.000000",
+          "profitable_folds": 4,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "4.245325",
+          "worst_fold_return_pct": "-2.381600"
+        },
+        "candidates": 16
+      },
+      "rsi_reversion": {
+        "aggregate": {
+          "candidates_per_fold": 6,
+          "compounded_benchmark_return_pct": "-7.972655",
+          "compounded_oos_return_pct": "1.850665",
+          "distinct_selected_candidates": 4,
+          "excess_over_benchmark_pct": "9.823320",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "1.991180",
+          "mean_in_sample_return_pct": "2.180990",
+          "mean_oos_return_pct": "0.189810",
+          "oos_trades": 31,
+          "profitable_fold_pct": "40.000000",
+          "profitable_folds": 4,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "2.861800",
+          "worst_fold_return_pct": "-1.609200"
+        },
+        "candidates": 6
+      },
+      "sma_cross": {
+        "aggregate": {
+          "candidates_per_fold": 18,
+          "compounded_benchmark_return_pct": "-7.972655",
+          "compounded_oos_return_pct": "-3.257060",
+          "distinct_selected_candidates": 7,
+          "excess_over_benchmark_pct": "4.715594",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "4.802500",
+          "mean_in_sample_return_pct": "4.588010",
+          "mean_oos_return_pct": "-0.214490",
+          "oos_trades": 24,
+          "profitable_fold_pct": "30.000000",
+          "profitable_folds": 3,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "7.457716",
+          "worst_fold_return_pct": "-5.556700"
+        },
+        "candidates": 18
+      },
+      "trend_filter": {
+        "aggregate": {
+          "candidates_per_fold": 10,
+          "compounded_benchmark_return_pct": "-7.972655",
+          "compounded_oos_return_pct": "-6.666583",
+          "distinct_selected_candidates": 7,
+          "excess_over_benchmark_pct": "1.306071",
+          "folds": 10,
+          "folds_with_selection": 10,
+          "in_sample_minus_oos_pct": "7.153860",
+          "mean_in_sample_return_pct": "6.553300",
+          "mean_oos_return_pct": "-0.600560",
+          "oos_trades": 51,
+          "profitable_fold_pct": "30.000000",
+          "profitable_folds": 3,
+          "ruined_folds": 0,
+          "worst_fold_drawdown_pct": "8.657833",
+          "worst_fold_return_pct": "-6.690700"
+        },
+        "candidates": 10
+      }
+    }
+  }
+}

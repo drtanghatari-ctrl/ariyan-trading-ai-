@@ -58,6 +58,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 - 2026-11-13 11:28 Tehran: user's continuous `forward_demo` run crashed on the real terminal with "Too many decimal places" (float noise in MT5 quote). FIXED: `_dec` in mt5_adapter now rounds floats to 8 places; regression test added.
 - A043 DONE: `strategies_extra.py` (TrendFilter, DonchianBreakout, RsiReversion, BollingerReversion, Ensemble) + `A043_STRATEGY_CATALOG.md` with evidence and sources (AQR Trends Everywhere, BIS WP366, Quantopian overfitting study). `forward_demo --strategy` accepts trend:/donchian:/rsi/boll and `+` ensembles. 1420 tests pass. No profitability claim; judge via walk-forward on real data (EURUSD D1 export of 2079 bars still not received here).
 
+- 2026-11-13 14:50 Tehran: REAL DATA RECEIVED (EURUSD D1, 2079 rows, MT5 export). Importer: broker publishes no bars on Dec 25/Jan 1, so `load_fx_csv` now declares them closed for daily data (`holidays` param); result = one gap-free run of 2076 bars. A044 study (`research/eurusd_d1_study.py`, params fixed before results; results JSON + `A044_EURUSD_D1_RESULTS.md`): NO reliable edge on EURUSD daily. Best fixed strategies ~+12% over 8y with ~18% drawdown (Sharpe ~0.3), mostly negative under a swap stress; walk-forward OOS +2.6% vs buy&hold +1.1% over ~5y, 4/10 profitable folds, IS-OOS gap 6.7 pts, 20 OOS trades. Conclusion: single-pair textbook rules are not shown profitable; next is multi-instrument data (XAUUSD, GBPUSD, USDJPY, indices, BTCUSD) and a portfolio layer, plus real cost data.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
@@ -65,7 +67,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 2c. (done) A038 walk-forward harness.
 2d. (done) A039 execution + paper broker.
 2e. (done) A040 MT5 demo adapter.
-2h. NEXT (after A042): user downloads the new ZIP, runs `forward_demo --max-steps 1` on the real terminal, then leaves it running; user exports EURUSD D1 history for `fx_csv_check`; then real backtest + walk-forward; hourly import needs a server-time (NY+7 / DST) rule.
+2i. NEXT (after A044): user exports D1 history for more instruments (XAUUSD, GBPUSD, USDJPY, a stock index, BTCUSD) and keeps the forward paper runner going; I build a multi-instrument portfolio backtest (volatility-scaled positions) and re-test trend/momentum as a diversified portfolio.
+2h. (older) (after A042): user downloads the new ZIP, runs `forward_demo --max-steps 1` on the real terminal, then leaves it running; user exports EURUSD D1 history for `fx_csv_check`; then real backtest + walk-forward; hourly import needs a server-time (NY+7 / DST) rule.
 2g. (older) (2026-11-13): (a) user runs `mt5_check` against LiteFinance demo with `--symbol-map EURUSD=EURUSD_o`; (b) user exports EURUSD history (MT5 History Center or a free download) and runs `fx_csv_check`; (c) real EURUSD backtest + walk-forward; (d) candle feed + forward demo loop only after (a) works and the user enables orders.
 2f. (older, superseded by 2g) user runs `python -m ariyan_trading.mt5_check` on Windows with an Opofinance DEMO account (see A040 doc); then a candle-feed + scheduler loop for forward demo trading; multi-instrument portfolio risk; real historical data pipeline for forex/stocks.
 
