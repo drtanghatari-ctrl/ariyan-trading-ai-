@@ -1,6 +1,6 @@
 # ARIYAN Trading AI — PROJECT STATE (source of truth for continuity)
 
-Last updated: 2026-11-13 (after A041; broker now LiteFinance demo)
+Last updated: 2026-11-13 (after A045)
 
 ## Where the code lives
 - Repo: https://github.com/drtanghatari-ctrl/ariyan-trading-ai-
@@ -59,6 +59,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 - A043 DONE: `strategies_extra.py` (TrendFilter, DonchianBreakout, RsiReversion, BollingerReversion, Ensemble) + `A043_STRATEGY_CATALOG.md` with evidence and sources (AQR Trends Everywhere, BIS WP366, Quantopian overfitting study). `forward_demo --strategy` accepts trend:/donchian:/rsi/boll and `+` ensembles. 1420 tests pass. No profitability claim; judge via walk-forward on real data (EURUSD D1 export of 2079 bars still not received here).
 
 - 2026-11-13 14:50 Tehran: REAL DATA RECEIVED (EURUSD D1, 2079 rows, MT5 export). Importer: broker publishes no bars on Dec 25/Jan 1, so `load_fx_csv` now declares them closed for daily data (`holidays` param); result = one gap-free run of 2076 bars. A044 study (`research/eurusd_d1_study.py`, params fixed before results; results JSON + `A044_EURUSD_D1_RESULTS.md`): NO reliable edge on EURUSD daily. Best fixed strategies ~+12% over 8y with ~18% drawdown (Sharpe ~0.3), mostly negative under a swap stress; walk-forward OOS +2.6% vs buy&hold +1.1% over ~5y, 4/10 profitable folds, IS-OOS gap 6.7 pts, 20 OOS trades. Conclusion: single-pair textbook rules are not shown profitable; next is multi-instrument data (XAUUSD, GBPUSD, USDJPY, indices, BTCUSD) and a portfolio layer, plus real cost data.
+
+- A045 DONE: research controls (`research_controls.py`, `scorecard.py`, `docs/engineering/RESEARCH_PROTOCOL.md`). User decisions: max drawdown 10%, Daily timeframe, last-12-months locked final test. Hash-chained registry, once-only holdout, scorecard with bootstrap CIs, probabilistic/deflated Sharpe. EURUSD holdout recorded as contaminated (registry in `research/registry/`). 1436 tests pass. User sent M1 files (3.5 months) for XAUUSD, GBPUSD, USDJPY, US500; still need DAILY exports for those plus BTCUSD.
 
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
