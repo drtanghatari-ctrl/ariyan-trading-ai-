@@ -62,6 +62,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A045 DONE: research controls (`research_controls.py`, `scorecard.py`, `docs/engineering/RESEARCH_PROTOCOL.md`). User decisions: max drawdown 10%, Daily timeframe, last-12-months locked final test. Hash-chained registry, once-only holdout, scorecard with bootstrap CIs, probabilistic/deflated Sharpe. EURUSD holdout recorded as contaminated (registry in `research/registry/`). 1436 tests pass. User sent M1 files (3.5 months) for XAUUSD, GBPUSD, USDJPY, US500; still need DAILY exports for those plus BTCUSD.
 
+- 2026-11-13 20:40 Tehran: Daily exports received for GBPUSD, USDJPY, XAUUSD (clean, 2036 bars each after declared holidays, 2018-11-13..2026-11-12) and US500 (BROKEN: broker has no bars 2025-07-16..2025-09-09, re-export identical; excluded for now). BTCUSD still missing. Holdouts (last 12 months, from 2025-11-12, 254 bars) locked and recorded in `research/registry/experiments.jsonl` for EURUSD (already contaminated), GBPUSD, USDJPY, XAUUSD; no strategy has been run on the new three. Loader: `research/load_d1.py`; `research/lock_holdouts.py`.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
