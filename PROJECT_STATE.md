@@ -53,6 +53,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A042 DONE: forward PAPER runner on real MT5 data (`forward.py`, `forward_demo.py`; adapter gained read-only `closed_candles`, `symbol_terms`, `timeframe_seconds`; `SignalExecutor.warm_up`). Sends NO orders to MT5; trades the A039 PaperBroker with real quotes, JSONL log. 7 new tests (1403 total) against a FAKE terminal; NOT yet run against the real terminal. Enabling real demo orders remains a separate explicit decision by the user.
 
+- 2026-11-13 10:49 Tehran: A042 `forward_demo --max-steps 1` RAN CLEANLY on the real MetaQuotes-Demo terminal (paper_only true, orders_sent_to_mt5 0). User also exported EURUSD D1 history from MT5: 2079 bars (2018-11-13 to 2026-11-13); file not yet received here. User gets code via ZIP sent in chat (ariyan_A042_new.zip), not GitHub.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
