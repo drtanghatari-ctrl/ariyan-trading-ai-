@@ -520,6 +520,10 @@ class SignalExecutor:
         self._run, self._history, self._seq = run_id, (), 0
         self.log = []
 
+    def warm_up(self, candles):
+        """Load already-closed candles as history WITHOUT acting on them."""
+        self._history = (self._history + tuple(candles))[-self._strategy.lookback:]
+
     def on_candle(self, candle):
         keep = self._strategy.lookback
         self._history = (self._history + (candle,))[-keep:]

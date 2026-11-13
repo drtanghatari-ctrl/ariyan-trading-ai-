@@ -168,6 +168,60 @@ class MT5DemoBroker(Broker):
             raise MT5Error('No tick for %s: %r' % (broker_symbol, self._mt5.last_error()))
         return Quote(_dec(tick.bid), _dec(tick.ask), int(tick.time_msc))
 
+    # ----- read-only market data (A042)
+    _TIMEFRAMES = {'M1': 60, 'M5': 300, 'M15': 900, 'M30': 1800, 'H1': 3600, 'H4': 14400, 'D1': 86400}
+
+    def timeframe_seconds(self, timeframe):
+        if timeframe not in self._TIMEFRAMES:
+            raise ValueError('timeframe must be one of %s' % ', '.join(self._TIMEFRAMES))
+        return self._TIMEFRAMES[timeframe]
+
+    def closed_candles(self, symbol, timeframe, count):
+        """The last `count` fully CLOSED candles, oldest first (the forming bar is excluded).
+
+        Timestamps are the broker's SERVER time written as if it were UTC (milliseconds);
+        they are consistent for ordering but are not true UTC. Volume is the tick volume.
+        """
+        from .market_data import Candle
+        self.timeframe_seconds(timeframe)
+        if type(count) is not int or not 1 <= count <= 5000:
+            raise ValueError('count must be an integer between 1 and 5000')
+        self._ready()
+        broker_symbol = self._broker_symbol(symbol)
+        constant = getattr(self._mt5, 'TIMEFRAME_' + timeframe, None)
+        if constant is None:
+            raise MT5Error('The terminal module has no timeframe %s' % timeframe)
+        rates = self._mt5.copy_rates_from_pos(broker_symbol, constant, 1, count)
+        if rates is None or len(rates) == 0:
+            raise MT5Error('No candles for %s %s: %r' % (broker_symbol, timeframe, self._mt5.last_error()))
+        candles = []
+
+        def price(value):
+            # Terminal prices are doubles already rounded to the symbol's digits; rounding to 8
+            # places only strips binary float noise and never changes a real price.
+            return _dec(round(float(value), 8))
+
+        for rate in rates:
+            try:
+                candles.append(Candle(int(rate['time']) * 1000, price(rate['open']), price(rate['high']),
+                                      price(rate['low']), price(rate['close']), _dec(int(rate['tick_volume']))))
+            except ValueError as exc:
+                raise MT5Error('Unusable candle from the terminal: %s' % exc) from exc
+        for earlier, later in zip(candles, candles[1:]):
+            if later.timestamp_ms <= earlier.timestamp_ms:
+                raise MT5Error('Terminal returned unordered candles')
+        return tuple(candles)
+
+    def symbol_terms(self, symbol):
+        """Contract terms the terminal reports for a symbol, as Decimals (read-only)."""
+        self._ready()
+        info = self._mt5.symbol_info(self._broker_symbol(symbol))
+        if info is None:
+            raise MT5Error('Unknown symbol %s: %r' % (self._broker_symbol(symbol), self._mt5.last_error()))
+        return {'contract_size': _dec(info.trade_contract_size), 'lot_min': _dec(info.volume_min),
+                'lot_max': _dec(info.volume_max), 'lot_step': _dec(info.volume_step),
+                'point': _dec(info.point), 'digits': int(info.digits)}
+
     # ----- trading
     def _filling(self, info):
         flags = info.filling_mode

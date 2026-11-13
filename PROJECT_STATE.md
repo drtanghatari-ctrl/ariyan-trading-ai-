@@ -51,6 +51,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - 2026-11-13 10:17 Tehran: FIRST REAL `mt5_check` PASSED (photo from user). Account: MetaQuotes-Demo, login 115560232 (user opened MetaQuotes' default demo after LiteFinance's demo logged in read-only), Hedge, currency EUR, balance 100000, mode DEMO, 0 positions, EURUSD quote bid 1.10576 / ask 1.10577, symbol name plain `EURUSD`. Trading enabled on this account. The adapter's refusal of non-trading accounts worked as designed on LiteFinance investor login. Caveat: MetaQuotes-Demo is a generic feed; its spreads/execution do not represent any real broker's costs. No orders have ever been sent.
 
+- A042 DONE: forward PAPER runner on real MT5 data (`forward.py`, `forward_demo.py`; adapter gained read-only `closed_candles`, `symbol_terms`, `timeframe_seconds`; `SignalExecutor.warm_up`). Sends NO orders to MT5; trades the A039 PaperBroker with real quotes, JSONL log. 7 new tests (1403 total) against a FAKE terminal; NOT yet run against the real terminal. Enabling real demo orders remains a separate explicit decision by the user.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
@@ -58,7 +60,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 2c. (done) A038 walk-forward harness.
 2d. (done) A039 execution + paper broker.
 2e. (done) A040 MT5 demo adapter.
-2g. NEXT (2026-11-13): (a) user runs `mt5_check` against LiteFinance demo with `--symbol-map EURUSD=EURUSD_o`; (b) user exports EURUSD history (MT5 History Center or a free download) and runs `fx_csv_check`; (c) real EURUSD backtest + walk-forward; (d) candle feed + forward demo loop only after (a) works and the user enables orders.
+2h. NEXT (after A042): user downloads the new ZIP, runs `forward_demo --max-steps 1` on the real terminal, then leaves it running; user exports EURUSD D1 history for `fx_csv_check`; then real backtest + walk-forward; hourly import needs a server-time (NY+7 / DST) rule.
+2g. (older) (2026-11-13): (a) user runs `mt5_check` against LiteFinance demo with `--symbol-map EURUSD=EURUSD_o`; (b) user exports EURUSD history (MT5 History Center or a free download) and runs `fx_csv_check`; (c) real EURUSD backtest + walk-forward; (d) candle feed + forward demo loop only after (a) works and the user enables orders.
 2f. (older, superseded by 2g) user runs `python -m ariyan_trading.mt5_check` on Windows with an Opofinance DEMO account (see A040 doc); then a candle-feed + scheduler loop for forward demo trading; multi-instrument portfolio risk; real historical data pipeline for forex/stocks.
 
 ## Open questions for the user
