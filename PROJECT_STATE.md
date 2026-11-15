@@ -66,6 +66,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - 2026-11-15: BTCUSD Daily received from LiteFinance (2920 bars, 7-day calendar, 2018-11-13..2026-11-12; only 2018-12-25 and 2019-01-01 missing, declared closed). Holdout locked (from 2025-11-12, 366 bars, 2554 development bars). US500 re-exported a third time: identical 55-day hole 2025-07-16..2025-09-09 (broker has no history), so US500 stays excluded. Study universe: EURUSD, GBPUSD, USDJPY, XAUUSD, BTCUSD.
 
+- A046 DONE: forecast-driven signals (`forecast_signals.py`, `research/make_forecasts.py`, `A046_FORECAST_SIGNALS.md`). Models (Kronos, TimesFM) are run by the user on the laptop and write a validated forecast CSV; `ForecastSignal` trades only when edge beats cost plus noise. Tested with the model-free naive baseline (EURUSD dev coverage 81.6%); Kronos/TimesFM adapters UNTESTED. Their pretraining likely covers our history, so only forward paper trading is a clean test. 8 new tests.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
