@@ -8,7 +8,7 @@ sys.path.insert(0, __file__.rsplit('/', 1)[0])
 from load_d1 import load  # noqa: E402
 from ariyan_trading.research_controls import ExperimentRegistry, holdout_start_index  # noqa: E402
 
-SYMBOLS = ('EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD')
+SYMBOLS = ('EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD')
 
 
 def main(data_dir, registry_path):

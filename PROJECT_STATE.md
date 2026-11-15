@@ -64,6 +64,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - 2026-11-13 20:40 Tehran: Daily exports received for GBPUSD, USDJPY, XAUUSD (clean, 2036 bars each after declared holidays, 2018-11-13..2026-11-12) and US500 (BROKEN: broker has no bars 2025-07-16..2025-09-09, re-export identical; excluded for now). BTCUSD still missing. Holdouts (last 12 months, from 2025-11-12, 254 bars) locked and recorded in `research/registry/experiments.jsonl` for EURUSD (already contaminated), GBPUSD, USDJPY, XAUUSD; no strategy has been run on the new three. Loader: `research/load_d1.py`; `research/lock_holdouts.py`.
 
+- 2026-11-15: BTCUSD Daily received from LiteFinance (2920 bars, 7-day calendar, 2018-11-13..2026-11-12; only 2018-12-25 and 2019-01-01 missing, declared closed). Holdout locked (from 2025-11-12, 366 bars, 2554 development bars). US500 re-exported a third time: identical 55-day hole 2025-07-16..2025-09-09 (broker has no history), so US500 stays excluded. Study universe: EURUSD, GBPUSD, USDJPY, XAUUSD, BTCUSD.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.

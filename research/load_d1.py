@@ -3,9 +3,10 @@ dates (Dec 24-26, Dec 31-Jan 2, Easter Fri/Mon); any other gap splits the series
 Usage: PYTHONPATH=app python research/load_d1.py FILE SYMBOL
 """
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from ariyan_trading.fx_csv import load_fx_csv
+from ariyan_trading.session_candles import daily_session_schedule
 
 
 def easter(y):
@@ -29,7 +30,18 @@ def known_holidays(first, last):
     return sorted(out)
 
 
+def crypto_schedule():
+    """Seven-day UTC calendar: crypto CFDs trade every day. The only two missing days in this broker's file
+    (2018-12-25, 2019-01-01, no bars published) are declared closed. A caller declaration."""
+    return daily_session_schedule('IMPORTED-CRYPTO-DAILY', 'UTC', (0, 1, 2, 3, 4, 5, 6), time(0), time(23, 59, 59),
+                                  date(2018, 1, 1), date(2026, 12, 31), 'IMPORTED-CRYPTO-7D (caller declaration)',
+                                  1_800_000_000_000, holidays=(date(2018, 12, 25), date(2019, 1, 1)))
+
+
 def load(path, symbol):
+    if symbol.startswith('BTC'):
+        return load_fx_csv(path, symbol=symbol, source='MT5-D1-EXPORT', timezone_name='UTC',
+                           schedule=crypto_schedule())
     return load_fx_csv(path, symbol=symbol, source='MT5-D1-EXPORT', timezone_name='UTC',
                        holidays=known_holidays(date(2018, 1, 1), date(2026, 12, 31)))
 
