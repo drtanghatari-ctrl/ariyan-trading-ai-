@@ -72,6 +72,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A047 DONE (protocol, code): pre-registered multi-instrument test of Kronos-small and TimesFM-3.0 (`docs/engineering/A047_MODEL_TEST_PROTOCOL.md`, `forecast_study.py`, `research/run_forecast_study.py` for the laptop, `research/evaluate_models.py`). Four pass marks (rank IC, direction >=52%, beats zero forecast, 70-90% coverage); all required; FAIL drops the model. Awaiting forecast files for 5 instruments x 2 models from the user's laptop. 3 new tests (1447 total).
 
+- 2026-11-17 PARTIAL A047 RESULT, TimesFM-3.0 (4 of 5 instruments; BTCUSD pending): mean rank IC -0.011 (90% interval -0.040..+0.022), pooled direction 50.4%, beats the zero forecast on 0 of 4 (needs 3 of 5, so FAIL is certain), interval coverage 81% (well calibrated). Gold alone looked better (IC +0.07, direction 54.9%) but picking one of four after the fact is exactly what the protocol forbids. Kronos-small EURUSD: FAIL. Kronos for the other 4 instruments not yet run. Forecast files in research/results/.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
