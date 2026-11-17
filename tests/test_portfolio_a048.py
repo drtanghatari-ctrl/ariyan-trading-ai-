@@ -124,3 +124,17 @@ class Simulation(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DirectionalFinancing(unittest.TestCase):
+    def test_long_and_short_pay_different_financing(self):
+        from ariyan_trading.portfolio import _fin_rate
+        i = Instrument('X', 0.0, 0.0001, financing_long=0.0002, financing_short=-0.0001)
+        self.assertEqual(_fin_rate(i, 1.0), 0.0002)
+        self.assertEqual(_fin_rate(i, -1.0), -0.0001)
+        self.assertEqual(_fin_rate(Instrument('Y', 0.0, 0.0003), -1.0), 0.0003)   # default: both directions
+
+    def test_calendar_start_filter(self):
+        from types import SimpleNamespace as N
+        d = N(candles=[N(timestamp_ms=t) for t in (1, 2, 3, 4)])
+        self.assertEqual(common_calendar([d], end_ms=3, start_ms=2), [2, 3])

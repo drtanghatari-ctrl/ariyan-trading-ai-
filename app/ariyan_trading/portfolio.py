@@ -20,6 +20,8 @@ class Instrument:
     cost_one_way: float          # share of notional traded
     financing_per_day: float     # share of gross notional per calendar day, both directions
     inverse: bool = False        # price is quote-currency per account-currency unit (USDJPY): USD return = 1 - P0/P1
+    financing_long: float = None   # A050: directional financing, cost per calendar day (negative = credit);
+    financing_short: float = None  # None means financing_per_day applies to that direction
 
 
 @dataclass(frozen=True)
@@ -47,11 +49,16 @@ class PortfolioConfig:
             raise ValueError('Invalid window settings')
 
 
-def common_calendar(datasets, end_ms=None):
-    """Sorted timestamps present in EVERY dataset (optionally up to end_ms)."""
+def common_calendar(datasets, end_ms=None, start_ms=None):
+    """Sorted timestamps present in EVERY dataset (optionally from start_ms up to end_ms)."""
     sets = [{c.timestamp_ms for c in d.candles} for d in datasets]
     shared = set.intersection(*sets)
-    return sorted(t for t in shared if end_ms is None or t <= end_ms)
+    return sorted(t for t in shared if (end_ms is None or t <= end_ms) and (start_ms is None or t >= start_ms))
+
+
+def _fin_rate(instrument, position):
+    rate = instrument.financing_long if position > 0 else instrument.financing_short
+    return instrument.financing_per_day if rate is None else rate
 
 
 def aligned(dataset, calendar):
@@ -118,7 +125,7 @@ def simulate(series, instruments, calendar, signal_name, config=PortfolioConfig(
         for s in names:
             o, c = series[s]
             move = pos[s] * equity * _ret(by[s], o[k], o[k + 1])
-            fin = abs(pos[s]) * equity * by[s].financing_per_day * config.fin_mult * gap_days
+            fin = abs(pos[s]) * equity * _fin_rate(by[s], pos[s]) * config.fin_mult * gap_days
             pnl[s] += move - fin
             fin_paid += fin
             gain += move - fin
