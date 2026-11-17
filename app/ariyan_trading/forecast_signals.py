@@ -230,3 +230,18 @@ def evaluate_forecasts(book, dataset, symbol, model, horizon_bars=1, start_ms=No
             'mae_model': abs_model / n, 'mae_zero_forecast': abs_zero / n,
             'beats_zero_forecast': abs_model < abs_zero,
             'coverage_q10_q90': covered / n, 'coverage_target': 0.8}
+
+
+def scored_rows(book, dataset, symbol, model, horizon_bars=1, end_ms=None):
+    """(predicted log return, realised log return, realised price inside q10..q90, abs error) per scored forecast."""
+    index = {c.timestamp_ms: i for i, c in enumerate(dataset.candles)}
+    out = []
+    for row in book.rows(symbol, model, horizon_bars):
+        i = index.get(row['decision_ts_ms'])
+        if i is None or i + horizon_bars >= len(dataset.candles):
+            continue
+        if end_ms is not None and dataset.candles[i + horizon_bars].timestamp_ms > end_ms:
+            continue
+        close, future = float(dataset.candles[i].close), float(dataset.candles[i + horizon_bars].close)
+        out.append((math.log(row['q50'] / close), math.log(future / close), row['q10'] <= future <= row['q90']))
+    return out

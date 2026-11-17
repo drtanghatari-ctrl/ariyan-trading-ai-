@@ -70,6 +70,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - 2026-11-17: FIRST MODEL RESULT. Kronos-small ran on the user's laptop (CPU, torch 2.15, pandas 3.1; Kronos requirements had to be installed unpinned with --only-binary). 730 EURUSD D1 forecasts, 2023-01-02..2025-11-11 (development only): direction 47.2%, rank IC -0.018, MAE 0.00507 vs 0.00344 for a zero forecast, 10-90% interval covered 57.7% (target 80%). NO skill on EURUSD daily; overconfident. Logged in registry (family forecast_models, 1 trial). File: research/results/eurusd_kronos_small_d1_dev.csv. Adapter for Kronos now verified to run; TimesFM untested.
 
+- A047 DONE (protocol, code): pre-registered multi-instrument test of Kronos-small and TimesFM-3.0 (`docs/engineering/A047_MODEL_TEST_PROTOCOL.md`, `forecast_study.py`, `research/run_forecast_study.py` for the laptop, `research/evaluate_models.py`). Four pass marks (rank IC, direction >=52%, beats zero forecast, 70-90% coverage); all required; FAIL drops the model. Awaiting forecast files for 5 instruments x 2 models from the user's laptop. 3 new tests (1447 total).
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
