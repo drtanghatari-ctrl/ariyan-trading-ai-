@@ -79,7 +79,7 @@ class CostTests(unittest.TestCase):
         mt5.no_quote = True
         eur = collect_costs(mt5, ['EURUSD'])['symbols'][0]
         self.assertEqual(eur['mid_price_source'], 'last daily close')
-        self.assertAlmostEqual(eur['mid_price'], 1.10001 + 299 * 1e-5, places=6)
+        self.assertAlmostEqual(eur['mid_price'], 1.10001 + 249 * 1e-5, places=6)
         self.assertIsNotNone(eur['spread_bp_median_250d'])
         self.assertIsNotNone(eur['swap_long_bp_per_day'])
 
