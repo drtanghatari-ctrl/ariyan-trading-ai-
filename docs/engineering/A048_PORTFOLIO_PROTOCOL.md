@@ -23,7 +23,7 @@ Signals start after 252 bars of history.
 ## Pass marks (from A045, applied to the BEST candidate and also reported for all)
 1. Net return positive after base costs AND after doubled costs.
 2. Deflated Sharpe probability >= 0.95. Trial count = 3 candidates + the 64 trials of the A044 EURUSD study (conservative), trial Sharpe variance from the three candidates.
-3. Maximum drawdown <= 10% in the full period, with halts and every calendar year reported.
+3. Maximum drawdown <= 10% measured from the ALL-TIME HIGH of the equity curve (restarts after a halt never hide it), with halts and every calendar year reported. A gap that jumps past the limit is reported as an overshoot and counts against the mark.
 4. Positive profit on at least 3 of 5 instruments, and no instrument above 50% of total profit.
 5. At least 100 position changes in total.
 6. Beats the always-long basket on risk-adjusted return (Sharpe), otherwise trend rules add nothing.
@@ -31,3 +31,6 @@ FAIL means the rules are not shown to work; nothing goes to the locked holdout.
 
 ## Limits
 Returns-based simulation, not the full order-level backtester; costs are assumptions, not this broker's measured costs; five markets is a small sample; diversification evidence in the literature comes from far more markets.
+
+## Amendment 2026-11-17 (before any real-data portfolio result)
+Unit tests showed that restarting after a halt with the peak reset lets a persistent decline trigger repeated halts, so the cumulative loss from the all-time high can exceed 10% even though each episode stays under it. Pass mark 3 is therefore measured from the all-time high, as above. The simulator is unchanged. Also fixed in testing: the gross-exposure cap is applied BEFORE the drawdown brake (it had wrongly cancelled the brake).
