@@ -32,7 +32,7 @@ class FakeMT5:
                   swap_short=-1.0, swap_rollover3days=3, margin_initial=0.0, trade_calc_mode=0, trade_mode=4)
 
     def symbol_info_tick(self, name):
-        return NS(bid=1.1000, ask=1.1002)
+        return None if getattr(self, 'no_quote', False) else NS(bid=1.1000, ask=1.1002)
 
     def account_info(self):
         return NS(server='Test-Demo', trade_mode=0)
@@ -73,6 +73,15 @@ class CostTests(unittest.TestCase):
         self.assertAlmostEqual(eur['swap_long_bp_per_day'], -0.0636, places=3)
         self.assertAlmostEqual(eur['swap_short_bp_per_day'], -0.0909, places=3)
         self.assertEqual({c[0] for c in mt5.calls}, {'select', 'rates'})
+
+    def test_no_live_quote_falls_back_to_last_daily_close(self):
+        mt5 = FakeMT5()
+        mt5.no_quote = True
+        eur = collect_costs(mt5, ['EURUSD'])['symbols'][0]
+        self.assertEqual(eur['mid_price_source'], 'last daily close')
+        self.assertAlmostEqual(eur['mid_price'], 1.10001 + 299 * 1e-5, places=6)
+        self.assertIsNotNone(eur['spread_bp_median_250d'])
+        self.assertIsNotNone(eur['swap_long_bp_per_day'])
 
     def test_find(self):
         self.assertEqual(find_symbols(FakeMT5(), ['*OIL*', '*XYZ*']), {'USOIL': 'Oil'})

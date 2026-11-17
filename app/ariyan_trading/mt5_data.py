@@ -46,10 +46,14 @@ def symbol_costs(mt5, name):
     info = mt5.symbol_info(name)
     if info is None:
         return {'symbol': name, 'found': False}
-    tick = mt5.symbol_info_tick(name)
-    mid = (tick.bid + tick.ask) / 2 if tick is not None and tick.bid and tick.ask else None
     rates = mt5.copy_rates_from_pos(name, mt5.TIMEFRAME_D1, 1, 250)
     spreads = [int(r['spread']) for r in rates] if rates is not None and len(rates) else []
+    tick = mt5.symbol_info_tick(name)
+    mid, mid_source = None, None
+    if tick is not None and tick.bid and tick.ask:
+        mid, mid_source = (tick.bid + tick.ask) / 2, 'live quote'
+    elif rates is not None and len(rates):                  # no quote yet (market closed or symbol just added)
+        mid, mid_source = float(rates[-1]['close']), 'last daily close'
     median_spread = statistics.median(spreads) if spreads else None
     point, contract = float(info.point), float(info.trade_contract_size)
     mode = int(info.swap_mode)
@@ -58,7 +62,7 @@ def symbol_costs(mt5, name):
         'currency_base': info.currency_base, 'currency_profit': info.currency_profit,
         'currency_margin': info.currency_margin, 'digits': int(info.digits), 'point': point,
         'contract_size': contract, 'volume_min': _round(info.volume_min), 'volume_step': _round(info.volume_step),
-        'volume_max': _round(info.volume_max), 'mid_price': mid,
+        'volume_max': _round(info.volume_max), 'mid_price': mid, 'mid_price_source': mid_source,
         'spread_now_points': int(info.spread), 'spread_floating': bool(info.spread_float),
         'spread_median_daily_points_250d': median_spread,
         'spread_bp_now': _round(info.spread * point / mid * 1e4) if mid else None,
