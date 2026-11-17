@@ -101,3 +101,11 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 ## Rules
 - No real-money action without explicit human authorization.
 - Keep this file updated at the end of every work session.
+
+## 2026-11-17 — LiteFinance Daily data QA and holdout lock (A050 preparation)
+- Nine LiteFinance demo Daily exports (EURUSD_o, GBPUSD_o, USDJPY_o, AUDUSD_o, USDCAD_o, USDCHF_o, NZDUSD_o, XAUUSD_o, BTCUSD), 3200 bars each, 2014-08 (BTC 2018-02) to 2026-11-17.
+- QA: no bad OHLC, duplicates or zero volume. Closes match the MetaQuotes feed over 2018-11..2026-11 (daily-return correlation 0.998-1.000). Only real anomalies are 18 short Sunday stub bars (DST weeks), merged into Monday by `research/prepare_lf.py`.
+- Holiday calendar extended back to 2014. Undeclared gaps: USDCHF 2015-01-16 and XAUUSD 2015-01-20 (the Swiss-franc shock week), so those two series start 2015-01-19 / 2015-01-21.
+- Holdouts locked (registry DISCLOSURE, start 2025-11-12, nothing evaluated). Registry seq extended by nine records.
+- 2014-08..2018-11 is data never examined (fresh period); 2018-11..2025-11 is the same market already examined on MetaQuotes data.
+- Open: commission for the account group the user will trade; A050 protocol still to be written before any result.

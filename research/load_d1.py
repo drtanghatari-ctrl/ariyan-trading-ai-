@@ -43,7 +43,7 @@ def load(path, symbol):
         return load_fx_csv(path, symbol=symbol, source='MT5-D1-EXPORT', timezone_name='UTC',
                            schedule=crypto_schedule())
     return load_fx_csv(path, symbol=symbol, source='MT5-D1-EXPORT', timezone_name='UTC',
-                       holidays=known_holidays(date(2018, 1, 1), date(2026, 12, 31)))
+                       holidays=known_holidays(date(2014, 1, 1), date(2026, 12, 31)))
 
 
 if __name__ == '__main__':
