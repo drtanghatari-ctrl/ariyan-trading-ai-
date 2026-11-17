@@ -15,9 +15,9 @@ def ts(y, m, d):
 class FakeMT5:
     TIMEFRAME_D1 = 16408
 
-    def __init__(self, bars=300, gap=False):
+    def __init__(self, bars=300, gap=False, empty_first=0):
         self.calls = []
-        self.bars, self.gap = bars, gap
+        self.bars, self.gap, self.empty_first = bars, gap, empty_first
 
     def symbol_select(self, name, enable):
         self.calls.append(('select', name))
@@ -39,6 +39,9 @@ class FakeMT5:
 
     def copy_rates_from_pos(self, name, tf, start, count):
         self.calls.append(('rates', name))
+        if self.empty_first > 0:
+            self.empty_first -= 1
+            return None
         rows, day = [], ts(2024, 1, 1)
         for i in range(min(count, self.bars)):
             if self.gap and i == 150:
@@ -105,10 +108,20 @@ class ExportTests(unittest.TestCase):
     def test_gap_reported_and_short_history_refused(self):
         with tempfile.TemporaryDirectory() as folder:
             self.assertEqual(export_daily(FakeMT5(gap=True), 'EURUSD', folder)['largest_gap_days'], 21)
-            short = export_daily(FakeMT5(bars=50), 'EURUSD', folder)
+            short = export_daily(FakeMT5(bars=50), 'EURUSD', folder, sleep=lambda s: None)
             self.assertFalse(short['ok'])
             self.assertIn('scroll', short['reason'])
             self.assertFalse(export_daily(FakeMT5(), 'NOPE', folder)['ok'])
+
+    def test_history_that_arrives_late_is_retried(self):
+        waits = []
+        with tempfile.TemporaryDirectory() as folder:
+            late = export_daily(FakeMT5(empty_first=2), 'EURUSD', folder, sleep=waits.append)
+            self.assertTrue(late['ok'])
+            self.assertEqual(len(waits), 2)
+            never = export_daily(FakeMT5(empty_first=9), 'EURUSD', folder, sleep=waits.append)
+            self.assertFalse(never['ok'])
+            self.assertEqual(len(waits), 4)                      # two more waits, then it gives up (3 attempts)
 
     def test_exported_file_loads_in_the_importer(self):
         from ariyan_trading.fx_csv import load_fx_csv

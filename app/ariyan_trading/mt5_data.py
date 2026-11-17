@@ -15,6 +15,7 @@ import argparse
 import json
 import statistics
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -84,13 +85,23 @@ def collect_costs(mt5, symbols):
             'symbols': [symbol_costs(mt5, s) for s in symbols]}
 
 
-def export_daily(mt5, name, folder, bars=D1_BARS):
-    """Write NAME_Daily_<first>_<last>.csv in the MT5 'Export Bars' format. Returns a summary dict."""
+def export_daily(mt5, name, folder, bars=D1_BARS, attempts=3, wait=5.0, sleep=time.sleep):
+    """Write NAME_Daily_<first>_<last>.csv in the MT5 'Export Bars' format. Returns a summary dict.
+
+    The terminal downloads missing history from the broker on the first request, which can take a minute or
+    two on a slow connection; a short or empty answer is retried a few times before giving up.
+    """
     mt5.symbol_select(name, True)
     info = mt5.symbol_info(name)
     if info is None:
-        return {'symbol': name, 'ok': False, 'reason': 'unknown symbol'}
-    rates = mt5.copy_rates_from_pos(name, mt5.TIMEFRAME_D1, 0, bars)
+        return {'symbol': name, 'ok': False, 'reason': 'unknown symbol (broker names may carry a suffix such as _o)'}
+    rates = None
+    for attempt in range(attempts):
+        rates = mt5.copy_rates_from_pos(name, mt5.TIMEFRAME_D1, 0, bars)
+        if rates is not None and len(rates) >= 100:
+            break
+        if attempt + 1 < attempts:
+            sleep(wait)
     if rates is None or len(rates) < 100:
         return {'symbol': name, 'ok': False, 'reason': 'only %d bars returned: open a Daily chart of %s, scroll '
                 'far left to load history, then run again' % (0 if rates is None else len(rates), name)}
@@ -150,7 +161,12 @@ def main(argv=None):
                 Path(args.out).write_text(text, encoding='utf-8')
             print(text)
         else:
-            summaries = [export_daily(mt5, s, args.folder) for s in symbols]
+            summaries = []
+            for s in symbols:
+                print('Fetching %s ... (the terminal may need a minute to download history)' % s, file=sys.stderr, flush=True)
+                result = export_daily(mt5, s, args.folder)
+                print('  %s' % json.dumps(result), file=sys.stderr, flush=True)
+                summaries.append(result)
             print(json.dumps(summaries, indent=1))
         return 0
     finally:
