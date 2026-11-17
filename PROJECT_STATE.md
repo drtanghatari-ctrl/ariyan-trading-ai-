@@ -68,6 +68,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 
 - A046 DONE: forecast-driven signals (`forecast_signals.py`, `research/make_forecasts.py`, `A046_FORECAST_SIGNALS.md`). Models (Kronos, TimesFM) are run by the user on the laptop and write a validated forecast CSV; `ForecastSignal` trades only when edge beats cost plus noise. Tested with the model-free naive baseline (EURUSD dev coverage 81.6%); Kronos/TimesFM adapters UNTESTED. Their pretraining likely covers our history, so only forward paper trading is a clean test. 8 new tests.
 
+- 2026-11-17: FIRST MODEL RESULT. Kronos-small ran on the user's laptop (CPU, torch 2.15, pandas 3.1; Kronos requirements had to be installed unpinned with --only-binary). 730 EURUSD D1 forecasts, 2023-01-02..2025-11-11 (development only): direction 47.2%, rank IC -0.018, MAE 0.00507 vs 0.00344 for a zero forecast, 10-90% interval covered 57.7% (target 80%). NO skill on EURUSD daily; overconfident. Logged in registry (family forecast_models, 1 trial). File: research/results/eurusd_kronos_small_d1_dev.csv. Adapter for Kronos now verified to run; TimesFM untested.
+
 ## Proposed next steps
 1. (done) Forex/CFD instrument terms.
 2. (done) Strategy interface + backtester.
