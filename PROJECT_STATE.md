@@ -122,3 +122,7 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 - User chose option 1: pause strategy searches, keep forward paper trading, screen new ideas on paper first. See `docs/engineering/IDEA_GATE.md` (reason, cost arithmetic, independent data, pre-registration, trial budget, sample-size reality check).
 - State: no strategy has passed any pre-registered test. Orders to MT5 remain disabled. The A042 forward runner only checks plumbing and measures real quotes; it is not evidence of an edge.
 - NEXT: wait for a new idea that passes the gate, or for the user to supply historical swap/interest-rate data (needed to test carry).
+
+## 2026-11-18 — Carry idea stopped at the gate
+- User supplied eight FRED rate series (`research/rates/`). Comparing them with the measured LiteFinance swaps shows the broker passes on only about 25-60% of the carry on the favourable side (best case ~1%/yr on notional, Sharpe ~0.1), so the idea fails gate step 2. No protocol or backtest, no trial counted; a DISCLOSURE record notes it. See `docs/engineering/CARRY_GATE_NOTE.md`.
+- State unchanged: no strategy has passed a test; orders disabled; forward runner is plumbing only.
