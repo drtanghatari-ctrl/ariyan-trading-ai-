@@ -117,3 +117,8 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 - Verdict FAIL on 6 of 7 marks. The locked holdout is NOT used. The trend family is closed for this universe; no tuning.
 - Observation: equal-share vol budgeting gives realised portfolio volatility of 3-5%, far below the 10% target (diversification across correlated USD pairs). Changing this would be a new protocol.
 - Simulator: directional financing (long/short) and a calendar start filter added (tests: 1468 pass).
+
+## 2026-11-18 — Decision: no new strategy search; idea gate adopted
+- User chose option 1: pause strategy searches, keep forward paper trading, screen new ideas on paper first. See `docs/engineering/IDEA_GATE.md` (reason, cost arithmetic, independent data, pre-registration, trial budget, sample-size reality check).
+- State: no strategy has passed any pre-registered test. Orders to MT5 remain disabled. The A042 forward runner only checks plumbing and measures real quotes; it is not evidence of an edge.
+- NEXT: wait for a new idea that passes the gate, or for the user to supply historical swap/interest-rate data (needed to test carry).
