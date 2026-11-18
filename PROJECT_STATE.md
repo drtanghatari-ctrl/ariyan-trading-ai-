@@ -109,3 +109,11 @@ cash trade math (A016), replay batch/view/export/review (A021–A026), Predictab
 - Holdouts locked (registry DISCLOSURE, start 2025-11-12, nothing evaluated). Registry seq extended by nine records.
 - 2014-08..2018-11 is data never examined (fresh period); 2018-11..2025-11 is the same market already examined on MetaQuotes data.
 - Open: commission for the account group the user will trade; A050 protocol still to be written before any result.
+
+## 2026-11-17 — A050 broader-universe trend portfolio: FAIL (pre-registered)
+- Protocol `docs/engineering/A050_BROADER_UNIVERSE_PROTOCOL.md` committed before the run (ae9e1e4). Study `research/broader_study.py`, results `research/results/broader_a050_dev.json`, six trials logged in the registry (27 records, chain verified).
+- Fresh segment F (8 instruments, 2015-01..2018-11, scored ~2016-01 on): all three trend rules lose money after measured ECN costs. Best (sma200): -9.0% total, max drawdown 12.2%, deflated Sharpe probability 0.003. Always-long basket also lost 6.9%.
+- Examined segment E (9 instruments, 2019-2025): all three rules negative after costs (-5.9% to -17.9%). With financing set to zero they are about +6% to +8% over 6.7 years, so financing cost is the main drain, and even without it the edge is small.
+- Verdict FAIL on 6 of 7 marks. The locked holdout is NOT used. The trend family is closed for this universe; no tuning.
+- Observation: equal-share vol budgeting gives realised portfolio volatility of 3-5%, far below the 10% target (diversification across correlated USD pairs). Changing this would be a new protocol.
+- Simulator: directional financing (long/short) and a calendar start filter added (tests: 1468 pass).
