@@ -1,0 +1,294 @@
+{
+ "best_candidate": "mom252",
+ "calendar": [
+  1542067200000,
+  1762819200000,
+  1782
+ ],
+ "deflated_sharpe_probability": 0.779176,
+ "marks": {
+  "1_net_positive_base_and_stressed": false,
+  "2_deflated_sharpe_ge_0.95": false,
+  "3_max_drawdown_le_10pct_from_all_time_high": false,
+  "4_positive_on_3_of_5_and_none_over_50pct": true,
+  "5_at_least_100_position_changes": true,
+  "6_beats_always_long_sharpe": false
+ },
+ "n_trials_used": 67,
+ "results": {
+  "long": {
+   "card": {
+    "annualised_return": 0.024085,
+    "annualised_return_ci": [
+     -0.006949,
+     0.056971
+    ],
+    "average_loss": null,
+    "average_win": null,
+    "bars": 1529,
+    "calmar": 0.252775,
+    "confidence": 0.9,
+    "downside_volatility": 0.034194,
+    "expectancy_per_trade": null,
+    "expected_shortfall_5pct_per_bar": -0.007324,
+    "kurtosis": 7.322706,
+    "max_drawdown": 0.095282,
+    "max_drawdown_duration_bars": 1027,
+    "max_drawdown_recovery_bars": 673,
+    "payoff_ratio": null,
+    "profit_factor": null,
+    "sharpe_annualised": 0.533434,
+    "sharpe_annualised_ci": [
+     -0.131297,
+     1.245007
+    ],
+    "sharpe_per_bar": 0.033603,
+    "skewness": -0.746191,
+    "sortino_annualised": 0.727901,
+    "total_return": 0.155349,
+    "trades": 0,
+    "volatility": 0.04666,
+    "win_rate": null,
+    "worst_bar": -0.020429,
+    "yearly_returns": {
+     "2019": 0.008725,
+     "2020": 0.062488,
+     "2021": 0.000633,
+     "2022": -0.051522,
+     "2023": 0.012716,
+     "2024": 0.034883,
+     "2025": 0.083766
+    },
+    "years": 6.06746
+   },
+   "costs_paid": 11.174107,
+   "final_equity": 11553.486252,
+   "financing_paid": 1060.850026,
+   "halted_bars": 0,
+   "halts": 0,
+   "pnl_by_instrument": {
+    "BTCUSD": 888.35848,
+    "EURUSD": -535.5446,
+    "GBPUSD": -550.803604,
+    "USDJPY": 563.001306,
+    "XAUUSD": 1188.47467
+   },
+   "position_changes": 125,
+   "profit_share": {
+    "BTCUSD": 0.571848,
+    "EURUSD": -0.344737,
+    "GBPUSD": -0.35456,
+    "USDJPY": 0.362412,
+    "XAUUSD": 0.765037
+   },
+   "stressed_final_equity": 11370.956485,
+   "stressed_return": 0.137096
+  },
+  "mom252": {
+   "card": {
+    "annualised_return": 0.018054,
+    "annualised_return_ci": [
+     -0.017669,
+     0.055704
+    ],
+    "average_loss": null,
+    "average_win": null,
+    "bars": 1529,
+    "calmar": 0.136662,
+    "confidence": 0.9,
+    "downside_volatility": 0.036562,
+    "expectancy_per_trade": null,
+    "expected_shortfall_5pct_per_bar": -0.007972,
+    "kurtosis": 8.019929,
+    "max_drawdown": 0.132108,
+    "max_drawdown_duration_bars": 797,
+    "max_drawdown_recovery_bars": null,
+    "payoff_ratio": null,
+    "profit_factor": null,
+    "sharpe_annualised": 0.372105,
+    "sharpe_annualised_ci": [
+     -0.329864,
+     1.098647
+    ],
+    "sharpe_per_bar": 0.02344,
+    "skewness": -0.216889,
+    "sortino_annualised": 0.525919,
+    "total_return": 0.114678,
+    "trades": 0,
+    "volatility": 0.051675,
+    "win_rate": null,
+    "worst_bar": -0.023357,
+    "yearly_returns": {
+     "2019": -0.007927,
+     "2020": 0.077668,
+     "2021": -0.031911,
+     "2022": 0.080836,
+     "2023": -0.020708,
+     "2024": -0.00661,
+     "2025": 0.024268
+    },
+    "years": 6.06746
+   },
+   "costs_paid": 111.143855,
+   "final_equity": 11146.783363,
+   "financing_paid": 892.039677,
+   "halted_bars": 21,
+   "halts": 1,
+   "pnl_by_instrument": {
+    "BTCUSD": 547.789569,
+    "EURUSD": -57.046426,
+    "GBPUSD": 2.978457,
+    "USDJPY": 121.910043,
+    "XAUUSD": 531.151719
+   },
+   "position_changes": 298,
+   "profit_share": {
+    "BTCUSD": 0.477675,
+    "EURUSD": -0.049745,
+    "GBPUSD": 0.002597,
+    "USDJPY": 0.106306,
+    "XAUUSD": 0.463167
+   },
+   "stressed_final_equity": 9901.646979,
+   "stressed_return": -0.009835
+  },
+  "mom_ens": {
+   "card": {
+    "annualised_return": 0.015281,
+    "annualised_return_ci": [
+     -0.016415,
+     0.04654
+    ],
+    "average_loss": null,
+    "average_win": null,
+    "bars": 1529,
+    "calmar": 0.165342,
+    "confidence": 0.9,
+    "downside_volatility": 0.032862,
+    "expectancy_per_trade": null,
+    "expected_shortfall_5pct_per_bar": -0.007189,
+    "kurtosis": 10.47668,
+    "max_drawdown": 0.09242,
+    "max_drawdown_duration_bars": 797,
+    "max_drawdown_recovery_bars": null,
+    "payoff_ratio": null,
+    "profit_factor": null,
+    "sharpe_annualised": 0.355993,
+    "sharpe_annualised_ci": [
+     -0.34614,
+     1.025275
+    ],
+    "sharpe_per_bar": 0.022425,
+    "skewness": -0.590196,
+    "sortino_annualised": 0.493028,
+    "total_return": 0.096381,
+    "trades": 0,
+    "volatility": 0.045512,
+    "win_rate": null,
+    "worst_bar": -0.024189,
+    "yearly_returns": {
+     "2019": 0.001988,
+     "2020": 0.043954,
+     "2021": -0.012252,
+     "2022": 0.084116,
+     "2023": -0.025964,
+     "2024": -0.000146,
+     "2025": 0.005042
+    },
+    "years": 6.06746
+   },
+   "costs_paid": 121.462963,
+   "final_equity": 10963.814136,
+   "financing_paid": 750.232979,
+   "halted_bars": 0,
+   "halts": 0,
+   "pnl_by_instrument": {
+    "BTCUSD": 347.083102,
+    "EURUSD": -38.718347,
+    "GBPUSD": 18.198192,
+    "USDJPY": 288.763403,
+    "XAUUSD": 348.487786
+   },
+   "position_changes": 709,
+   "profit_share": {
+    "BTCUSD": 0.360114,
+    "EURUSD": -0.040172,
+    "GBPUSD": 0.018881,
+    "USDJPY": 0.299605,
+    "XAUUSD": 0.361572
+   },
+   "stressed_final_equity": 10145.927427,
+   "stressed_return": 0.014593
+  },
+  "sma200": {
+   "card": {
+    "annualised_return": 0.015012,
+    "annualised_return_ci": [
+     -0.020145,
+     0.049758
+    ],
+    "average_loss": null,
+    "average_win": null,
+    "bars": 1529,
+    "calmar": 0.158165,
+    "confidence": 0.9,
+    "downside_volatility": 0.034926,
+    "expectancy_per_trade": null,
+    "expected_shortfall_5pct_per_bar": -0.007712,
+    "kurtosis": 10.700959,
+    "max_drawdown": 0.094916,
+    "max_drawdown_duration_bars": 797,
+    "max_drawdown_recovery_bars": null,
+    "payoff_ratio": null,
+    "profit_factor": null,
+    "sharpe_annualised": 0.323794,
+    "sharpe_annualised_ci": [
+     -0.455284,
+     0.999874
+    ],
+    "sharpe_per_bar": 0.020397,
+    "skewness": -0.158623,
+    "sortino_annualised": 0.462227,
+    "total_return": 0.094623,
+    "trades": 0,
+    "volatility": 0.049858,
+    "win_rate": null,
+    "worst_bar": -0.023549,
+    "yearly_returns": {
+     "2019": -0.008734,
+     "2020": 0.058501,
+     "2021": -0.035336,
+     "2022": 0.097142,
+     "2023": -0.012305,
+     "2024": -0.005397,
+     "2025": 0.003394
+    },
+    "years": 6.06746
+   },
+   "costs_paid": 94.986552,
+   "final_equity": 10946.226806,
+   "financing_paid": 818.830917,
+   "halted_bars": 0,
+   "halts": 0,
+   "pnl_by_instrument": {
+    "BTCUSD": 522.76705,
+    "EURUSD": 90.523173,
+    "GBPUSD": 210.150584,
+    "USDJPY": 244.356349,
+    "XAUUSD": -121.570351
+   },
+   "position_changes": 300,
+   "profit_share": {
+    "BTCUSD": 0.552475,
+    "EURUSD": 0.095668,
+    "GBPUSD": 0.222093,
+    "USDJPY": 0.258243,
+    "XAUUSD": -0.128479
+   },
+   "stressed_final_equity": 9720.259194,
+   "stressed_return": -0.027974
+  }
+ },
+ "trial_sharpe_variance": 2e-06,
+ "verdict": "FAIL"
+}

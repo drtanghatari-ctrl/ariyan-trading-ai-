@@ -6,6 +6,17 @@ other adapters when the relevant foundation is ready; their absence must not be
 presented as support or allowed to obscure V1 progress. Profitability validation,
 capital survival and explicit human authority remain priorities for every market.
 
+## Update 2026-11-11 — forex and CFD terms (A033)
+
+The user's target broker offers forex, metals, commodities, stocks, indices and
+crypto, most likely as margined CFDs. A033 adds metadata and exact lot/pip/margin
+arithmetic for forex pairs and CFDs (see `A033_MARGIN_INSTRUMENTS.md`). It is
+representation only: ledger accounting, portfolio risk and execution for these
+products are not implemented, and their absence must not be presented as support.
+A034/A035 add an offline long/short margin backtester for one instrument at a time
+(see `A035_MARGIN_BACKTEST.md`); it needs continuous bars, so session-based markets
+still require the session layer first.
+
 ## Current implementation and extension boundary
 
 A007 provides a shared OHLCV representation and spot-style, single-symbol,
